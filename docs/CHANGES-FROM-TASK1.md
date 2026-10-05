@@ -1,0 +1,19 @@
+# Changes from the Task 1 design
+
+For the Task 3 final report, which must reflect every change since Task 1. Each change below is a decision taken during implementation, with the reason.
+
+| Area | Task 1 said | Implemented | Why |
+| --- | --- | --- | --- |
+| Back-end stack | ASP.NET Core 8, Entity Framework Core, xUnit, FluentValidation | Node.js 22 with TypeScript, Express 5, `pg` with hand-written parameterised SQL, Vitest, Zod | The same layered architecture, patterns and API contract were kept. TypeScript across front and back end meant one language, shared types and one toolchain for a one-person team, and the whole suite could be run end to end against PostgreSQL during development. Section 6's class diagram maps one-to-one onto the TypeScript classes. |
+| Unit of Work | EF Core `DbContext` | `UnitOfWork.run()` wrapping a PostgreSQL transaction and handing repositories bound to it | Same pattern, no ORM. |
+| Front-end hosting | Azure Static Web Apps, separate from the API | The React build is served by the API's own App Service, same origin | Static Web Apps' free tier cannot proxy to an App Service API. Two origins would force the refresh cookie to be `SameSite=None`, which Safari blocks, and would need CORS. One origin keeps the cookie `SameSite=Strict`, removes CORS entirely, and lets the CSP be `'self'` everywhere. A CDN can sit in front later through Azure Front Door. |
+| Staging | App Service deployment slot with swap | A second web app on the same B1 plan | Slots need the Standard tier. A second app on the same plan costs nothing extra. Rollback is a redeploy of the previous tag rather than a slot swap. |
+| Migrations | A pipeline step before deployment | Applied by the app at startup under a PostgreSQL advisory lock | The database is on a private subnet, so the GitHub runner cannot reach it. This keeps it private. |
+| Secrets | Azure Key Vault with managed identity | App Service application settings, which are encrypted at rest | Same effect for a single-app deployment at lower setup cost. Key Vault references can be added without code changes because the app reads environment variables. |
+| File storage | Blob Storage for delivery notes and signatures | Deferred | Not required by any Must user story. The donation record holds a notes field instead. |
+| Test levels | Unit, integration, Playwright end-to-end | Unit and API integration (114 tests), front-end component tests | The integration tests drive the full HTTP stack against a real database, including concurrency. Browser end-to-end tests are the next addition. |
+| Household status | Draft, Pending, Active, Suspended, Archived | Same five; registration goes straight to Pending, and Draft is reached by "return for correction" | Matches the sequence diagram SD-01, which already showed registration creating a pending household. |
+| Reference code | `SZN-2026-04817` (digits) | `SZN-2026-7K4QX2` (six characters, Crockford base32) | Random rather than sequential, so a code reveals nothing about the size of the register (T-12), with letters that cannot be confused when read aloud. |
+| Schema additions | — | `refresh_tokens`, `password_reset_tokens`, `parcel_components`; `users.site_id`, `users.donor_id`; event `min_volunteers`, `variance` | Needed by the authentication design (10.2), BR-05 parcel contents, BR-07, coordinator site scoping and the donor portal. |
+| Stock ledger | Stock derived only by summing movements | `quantity_remaining` on each batch, plus the append-only movement ledger | The running balance with a `CHECK (>= 0)` constraint and row locks makes overselling impossible under concurrency; the ledger still explains every change. |
+| Separation of duties | Not specified | The person who registered a household cannot verify it | Added as a fraud control alongside BR-03. |
