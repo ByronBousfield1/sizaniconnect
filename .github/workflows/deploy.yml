@@ -1,0 +1,107 @@
+# Continuous deployment.
+#   develop -> staging web app      (automatic)
+#   main    -> production web app   (requires approval on the "production" environment)
+# Deployment jobs are skipped until the Azure variables exist, so the repository can be pushed
+# before the cloud resources are created. See docs/DEPLOYMENT.md.
+name: Deploy
+
+on:
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Build release package
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the React front end
+        working-directory: web
+        run: npm ci && npm run build
+      - name: Build the API and keep production dependencies only
+        working-directory: api
+        run: npm ci && npm run build && npm prune --omit=dev
+      - name: Assemble one self-contained package
+        run: |
+          mkdir release
+          cp -r api/dist api/migrations api/node_modules api/package.json release/
+          cp -r web/dist release/public
+          echo "${GITHUB_SHA}" > release/version.txt
+          cd release && zip -qr ../release.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.sha }}
+          path: release.zip
+          retention-days: 30
+
+  staging:
+    name: Deploy to staging
+    if: github.ref == 'refs/heads/develop' && vars.AZURE_WEBAPP_NAME_STAGING != ''
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://${{ vars.AZURE_WEBAPP_NAME_STAGING }}.azurewebsites.net
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-${{ github.sha }}
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME_STAGING }}
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE_STAGING }}
+          package: release.zip
+      - name: Smoke test (health endpoint reports this exact build)
+        run: |
+          url="https://${{ vars.AZURE_WEBAPP_NAME_STAGING }}.azurewebsites.net/api/v1/health"
+          for i in $(seq 1 30); do
+            body=$(curl -fsS "$url" || true)
+            echo "attempt $i: $body"
+            if echo "$body" | grep -q "\"version\":\"${GITHUB_SHA}\"" && echo "$body" | grep -q '"database":"ok"'; then exit 0; fi
+            sleep 10
+          done
+          echo "Staging did not come up healthy on ${GITHUB_SHA}"; exit 1
+
+  production:
+    name: Deploy to production
+    if: github.ref == 'refs/heads/main' && vars.AZURE_WEBAPP_NAME_PRODUCTION != ''
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://${{ vars.AZURE_WEBAPP_NAME_PRODUCTION }}.azurewebsites.net
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-${{ github.sha }}
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME_PRODUCTION }}
+          publish-profile: ${{ secrets.AZURE_PUBLISH_PROFILE_PRODUCTION }}
+          package: release.zip
+      - name: Smoke test (health endpoint reports this exact build)
+        run: |
+          url="https://${{ vars.AZURE_WEBAPP_NAME_PRODUCTION }}.azurewebsites.net/api/v1/health"
+          for i in $(seq 1 30); do
+            body=$(curl -fsS "$url" || true)
+            echo "attempt $i: $body"
+            if echo "$body" | grep -q "\"version\":\"${GITHUB_SHA}\"" && echo "$body" | grep -q '"database":"ok"'; then exit 0; fi
+            sleep 10
+          done
+          echo "::error::Production is not healthy on ${GITHUB_SHA}. Roll back by re-running this workflow on the previous release tag."
+          exit 1

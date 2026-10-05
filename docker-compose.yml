@@ -1,0 +1,34 @@
+# Local run of the full stack: `docker compose up --build`, then open http://localhost:8080
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sizani
+      POSTGRES_PASSWORD: sizani
+      POSTGRES_DB: sizani
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U sizani']
+      interval: 5s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - '8080:8080'
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://sizani:sizani@db:5432/sizani
+      DATABASE_SSL: 'false'
+      JWT_SECRET: local-compose-only-secret-not-for-real-use-0001
+      ID_HASH_PEPPER: local-compose-only-pepper-not-for-real-use-001
+      APP_BASE_URL: http://localhost:8080
+      SEED_DEMO_DATA: 'true'
+      SEED_DEMO_PASSWORD: Sizani-Demo-2026
+
+volumes:
+  pgdata:
