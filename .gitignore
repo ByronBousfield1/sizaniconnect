@@ -1,0 +1,11 @@
+node_modules/
+dist/
+coverage/
+api/public/
+.env
+*.log
+.DS_Store
+publish-profile*.xml
+release/
+release.zip
+*.tsbuildinfo
