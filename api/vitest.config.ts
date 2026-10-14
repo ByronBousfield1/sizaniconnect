@@ -12,6 +12,7 @@ export default defineConfig({
       NODE_ENV: 'test',
       PBKDF2_ITERATIONS: '1000',
       AUTH_RATE_LIMIT_PER_MINUTE: '1000',
+      RATE_LIMIT_PER_MINUTE: '100000',
     },
     coverage: {
       provider: 'v8',

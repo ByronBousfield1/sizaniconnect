@@ -13,6 +13,7 @@ export interface Config {
   refreshTokenTtlDays: number;
   pbkdf2Iterations: number;
   authRateLimitPerMinute: number;
+  generalRateLimitPerMinute: number;
   lockoutThreshold: number;
   lockoutMinutes: number;
   checkinWindowMinutes: number;
@@ -54,6 +55,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     refreshTokenTtlDays: 7,
     pbkdf2Iterations: Number(process.env.PBKDF2_ITERATIONS ?? 600_000),
     authRateLimitPerMinute: Number(process.env.AUTH_RATE_LIMIT_PER_MINUTE ?? 10),
+    generalRateLimitPerMinute: Number(process.env.RATE_LIMIT_PER_MINUTE ?? 1000),
     lockoutThreshold: 5,
     lockoutMinutes: 15,
     checkinWindowMinutes: 60,

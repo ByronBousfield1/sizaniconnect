@@ -86,12 +86,12 @@ flowchart TB
     REPO[Repositories<br/>parameterised SQL]
     BUS[Event bus<br/>observers: email, denormalisation]
   end
-  subgraph "Private subnet"
-    PG[(PostgreSQL 16<br/>Flexible Server)]
+  subgraph "Azure Database for PostgreSQL"
+    PG[(PostgreSQL 16<br/>Flexible Server<br/>firewall: app IPs only)]
   end
   SPA -- "HTTPS, same origin" --> HTTP
   HTTP --> SVC --> DOM
-  SVC --> REPO -- "TLS, VNet integration" --> PG
+  SVC --> REPO -- "TLS, certificate verified" --> PG
   SVC -. after commit .-> BUS
 ```
 
@@ -121,8 +121,9 @@ Mapped to the threat assessment in Task 1 Section 10.1.
 | T-03 SQL injection | Parameterised queries only; a lint rule fails the build if a value is interpolated into SQL; LIKE wildcards escaped | `households.test.ts` |
 | T-04 one user reading another's data | Resource-level checks: coordinators confined to their site, donors to their own records; another donor's receipt returns 404, not 403 | `supply-admin.test.ts`, `operations.test.ts` |
 | T-05 privilege escalation | Deny-by-default role policies on every route | `auth.test.ts` |
-| T-06 database disclosure | ID numbers stored only as an HMAC with a key kept outside the database; TLS to the database; database on a private subnet | `households.test.ts` |
+| T-06 database disclosure | ID numbers stored only as an HMAC with a key kept outside the database; TLS with certificate verification to the database; database firewall admits only the web apps' outbound addresses | `households.test.ts` |
 | T-08 cross-site request forgery | Bearer tokens for the API; the refresh cookie is SameSite=Strict, path-scoped, and its endpoints check `Origin` | `auth.test.ts` |
+| T-10 denial of service | Every route sits behind a per-IP request ceiling (1,000 a minute, sized for a site sharing one mobile-data address); bodies capped at 100 KB; reports capped at one month; pagination capped at 100 | `rate-limit.test.ts` |
 | T-09 repudiation | Append-only audit log enforced by a database trigger, recording who, what and when, but not personal values | `households.test.ts` |
 | Session theft | 15-minute access tokens held only in memory; refresh tokens rotate on every use, and replaying an old one revokes the whole session family | `auth.test.ts` |
 | T-11 vulnerable dependencies | `npm audit` gate in CI, CodeQL, Dependabot | CI |
@@ -133,7 +134,7 @@ POPIA: data minimisation (age bands rather than birth dates, no stored ID number
 ## Tests
 
 ```bash
-cd api && npm test            # 114 tests: unit + integration against real PostgreSQL
+cd api && npm test            # 115 tests: unit + integration against real PostgreSQL
 cd api && npm run test:coverage
 cd web && npm test            # component tests for sign-in, role navigation and the event desk
 ```
@@ -206,7 +207,7 @@ web/
   src/pages/            one file per area, screens S1 to S22 from the journey map
   src/components/       layout and the small UI kit
   src/lib/              API client, auth context, formatting
-infra/azure-setup.sh    provisions the Azure resources
+infra/azure-setup.sh    provisions the Azure resources (safe to re-run)
 docs/                   deployment guide, changes from Task 1, presentation notes
 ```
 

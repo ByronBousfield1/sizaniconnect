@@ -1,15 +1,23 @@
 version: 2
 updates:
+  # Patch and minor updates arrive weekly as pull requests into develop, where CI tests them.
+  # Major versions are upgraded deliberately, not automatically, because they can change behaviour.
   - package-ecosystem: npm
     directory: /api
     schedule: { interval: weekly }
     target-branch: develop
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: npm
     directory: /web
     schedule: { interval: weekly }
     target-branch: develop
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
