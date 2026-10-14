@@ -4,6 +4,9 @@ Food relief operations for **Sizani Community Food Network NPC**, a Johannesburg
 
 INSY7315 Information Systems 3E (WIL), Group 13, Task 2: Code and Implementation.
 
+- **Live site:** <https://sizaniconnect-bb7315.azurewebsites.net> (staging: <https://sizaniconnect-bb7315-staging.azurewebsites.net>)
+- **Task 2 presentation:** [SizaniConnect-Task2-Presentation.pdf](docs/SizaniConnect-Task2-Presentation.pdf), 16 slides, 14 October 2026
+
 ![The event desk: a volunteer enters a household's reference code and gets an unmistakable verdict](docs/screenshots/event-desk.png)
 
 ## What it does
@@ -208,11 +211,12 @@ web/
   src/components/       layout and the small UI kit
   src/lib/              API client, auth context, formatting
 infra/azure-setup.sh    provisions the Azure resources (safe to re-run)
-docs/                   deployment guide, changes from Task 1, presentation notes
+docs/                   presentation (PDF), deployment guide, changes from Task 1, presentation notes
 ```
 
 ## Documentation
 
+- [Task 2 implementation presentation (PDF)](docs/SizaniConnect-Task2-Presentation.pdf)
 - [Deploying to Azure](docs/DEPLOYMENT.md)
 - [Changes from the Task 1 design](docs/CHANGES-FROM-TASK1.md)
 - [Implementation presentation notes](docs/PRESENTATION.md)
