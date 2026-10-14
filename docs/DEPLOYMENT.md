@@ -6,13 +6,14 @@ About 30 minutes, most of it waiting for the database to provision. You need an 
 
 | Resource | Tier | Purpose |
 | --- | --- | --- |
-| Virtual network `10.10.0.0/16` | — | `snet-app` for the web apps' outbound traffic, `snet-db` for the database |
 | App Service plan | Linux B1 | Hosts both web apps at no extra cost |
 | Web app `sizaniconnect-<suffix>` | Node 22 | Production |
 | Web app `sizaniconnect-<suffix>-staging` | Node 22 | Staging, deployed from `develop` |
-| PostgreSQL Flexible Server | Burstable B1ms, 32 GB | Databases `sizani_production` and `sizani_staging`, private subnet only |
+| PostgreSQL Flexible Server | Burstable B1ms, 32 GB | Databases `sizani_production` and `sizani_staging`. TLS required; the firewall admits only the web apps' outbound IP addresses |
 
 Staging is a second web app rather than a deployment slot because slots need the Standard tier.
+
+The database is not on a private subnet. On the Azure for Students subscription, every private DNS zone name was rejected, including names in the documented format, so the server uses its public endpoint with a firewall instead: only the web apps' own outbound addresses can connect, and only over TLS with a strong random password.
 
 ## 1. Provision Azure
 
@@ -22,7 +23,7 @@ Open **Azure Cloud Shell** (Bash) from the portal, upload `infra/azure-setup.sh`
 SUFFIX=yourinitials7315 bash infra/azure-setup.sh
 ```
 
-The script creates everything above, generates the database password, JWT secret and ID-hash pepper, stores them only in each web app's application settings, and writes two publish profile files.
+The script creates everything above, generates the database password, JWT secret and ID-hash pepper, and stores them only in each web app's application settings. It is safe to re-run: existing resources are reused and the secrets are regenerated together.
 
 > **If Azure refuses the region.** Azure for Students subscriptions only allow some regions for some services. If you see `LocationIsOfferRestricted` or a policy error naming allowed regions, run again with one of them, for example `LOCATION=eastus SUFFIX=... bash infra/azure-setup.sh`, and note the region change in the Task 3 report.
 
@@ -31,7 +32,7 @@ The script creates everything above, generates the database password, JWT secret
 1. Create a new repository and push everything (step 3 below), or create it empty first.
 2. **Settings, Secrets and variables, Actions.**
    - Variables: `AZURE_WEBAPP_NAME_PRODUCTION` and `AZURE_WEBAPP_NAME_STAGING`, set to the app names the script printed.
-   - Secrets: `AZURE_PUBLISH_PROFILE_PRODUCTION` and `AZURE_PUBLISH_PROFILE_STAGING`, each set to the full contents of the matching `publish-profile-*.xml` file. Then delete the files.
+   - Secrets: `AZURE_PUBLISH_PROFILE_PRODUCTION` and `AZURE_PUBLISH_PROFILE_STAGING`. In the Azure portal, open each web app, click **Download publish profile** on its Overview page, open the file in a text editor and paste the whole contents in as the secret. Add them on the **Secrets** tab, never as variables, then delete the downloaded files. If a profile is ever exposed, click **Reset publish profile** and repeat.
 3. **Settings, Environments.** Create `staging` and `production`. On `production`, add yourself as a required reviewer, so a release to production waits for a click.
 4. **Settings, Branches.** Add protection rules for `main` and `develop`: require a pull request before merging, and require the CI status checks (`API`, `Web`, `Dependency audit`) to pass.
 5. **Settings, Code security.** Turn on Dependabot alerts and secret scanning with push protection.
@@ -40,7 +41,7 @@ Until the two variables exist the deployment jobs are skipped, so pushing first 
 
 ## 3. Push the code
 
-From the unzipped folder, which already contains the Git history:
+From the project folder, which already contains the Git history:
 
 ```bash
 git remote add origin https://github.com/<you>/sizaniconnect.git
