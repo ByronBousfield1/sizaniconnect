@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { loadConfig } from '../../src/config.js';
+import { loadConfig, type Config } from '../../src/config.js';
 import { buildContainer } from '../../src/container.js';
 import { migrate } from '../../src/db/migrate.js';
 import { createPool } from '../../src/db/pool.js';
@@ -21,7 +21,7 @@ export const newSaId = () => syntheticSaId(rand);
  * Builds a fresh database and app for one test file: real PostgreSQL, real migrations, real HTTP
  * pipeline. Only the clock and the mail sender are substituted.
  */
-export async function createHarness() {
+export async function createHarness(configOverrides: Partial<Config> = {}) {
   const pool = createPool(TEST_DB, false);
   await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await migrate(pool, logger);
@@ -31,6 +31,7 @@ export async function createHarness() {
     pbkdf2Iterations: 1000,
     authRateLimitPerMinute: 1000,
     appBaseUrl: 'http://localhost:5173',
+    ...configOverrides,
   });
   let now = new Date();
   const email = new MemoryEmailSender();

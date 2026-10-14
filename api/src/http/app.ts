@@ -1,5 +1,6 @@
 import cookieParser from 'cookie-parser';
 import express, { Router } from 'express';
+import { rateLimit } from 'express-rate-limit';
 import helmet from 'helmet';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -51,6 +52,20 @@ export function createApp({ config, services, tokens, pool, log }: AppContext) {
       },
       strictTransportSecurity: { maxAge: 31_536_000, includeSubDomains: true },
       referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    }),
+  );
+  // T-10: a ceiling on requests per IP for every route, including static files and the health check.
+  // Generous enough for a whole distribution site sharing one mobile-data address; sign-in has its
+  // own much stricter limit in routes/auth.ts.
+  app.use(
+    rateLimit({
+      windowMs: 60_000,
+      limit: config.generalRateLimitPerMinute,
+      standardHeaders: 'draft-7',
+      legacyHeaders: false,
+      handler: (_req, res) => {
+        res.status(429).json({ error: { code: 'TOO_MANY_REQUESTS', message: 'Too many requests. Wait a minute and try again.' } });
+      },
     }),
   );
   app.use(pinoHttp({ logger: log, autoLogging: { ignore: (req) => req.url === '/api/v1/health' } }));
