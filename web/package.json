@@ -14,7 +14,7 @@
   "dependencies": {
     "@fontsource/atkinson-hyperlegible": "^5.2.5",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react-dom": "^19.3.1",
     "react-router-dom": "^7.6.0"
   },
   "devDependencies": {
