@@ -501,6 +501,28 @@ a:hover {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   gap: 0 var(--s-4);
 }
+/* Fields side by side share their rows (label, hint, input, error), so the inputs line up even
+   when only one of them has a hint. */
+.form-row > .field {
+  grid-row: span 4;
+  grid-template-rows: subgrid;
+  row-gap: var(--s-1);
+  align-content: start;
+}
+.form-row > .field > label {
+  grid-row: 1;
+}
+.form-row > .field > .field-hint {
+  grid-row: 2;
+  align-self: end;
+}
+.form-row > .field > :is(input, select, textarea) {
+  grid-row: 3;
+  align-self: start;
+}
+.form-row > .field > .field-error {
+  grid-row: 4;
+}
 
 .form-actions {
   display: flex;
