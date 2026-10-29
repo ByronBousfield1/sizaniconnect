@@ -183,6 +183,14 @@ export class TokenRepository {
     ]);
   }
 
+  /** Signs out every other device after a password change, keeping the session that made it. */
+  async revokeAllForUserExceptFamily(userId: string, keepFamilyId: string | null): Promise<void> {
+    await this.db.query(
+      'UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL AND family_id IS DISTINCT FROM $2::uuid',
+      [userId, keepFamilyId],
+    );
+  }
+
   async revokeAllForUser(userId: string): Promise<void> {
     await this.db.query('UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [
       userId,
@@ -209,5 +217,36 @@ export class TokenRepository {
       [hash],
     );
     return r.rows[0] ?? null;
+  }
+}
+
+export class RecoveryCodeRepository {
+  constructor(private readonly db: Db) {}
+
+  /** Generating a new set always retires the old one. */
+  async replaceAll(userId: string, hashes: string[]): Promise<void> {
+    await this.db.query('DELETE FROM recovery_codes WHERE user_id = $1', [userId]);
+    await this.db.query('INSERT INTO recovery_codes (code_hash, user_id) SELECT unnest($2::char(64)[]), $1', [userId, hashes]);
+  }
+
+  /** Marks one unused code as spent. Returns false if it does not exist, belongs to someone else, or was used. */
+  async consume(userId: string, hash: string): Promise<boolean> {
+    const r = await this.db.query(
+      'UPDATE recovery_codes SET used_at = now() WHERE code_hash = $1 AND user_id = $2 AND used_at IS NULL',
+      [hash, userId],
+    );
+    return (r.rowCount ?? 0) === 1;
+  }
+
+  async status(userId: string): Promise<{ remaining: number; generatedAt: Date | null }> {
+    const r = await this.db.query(
+      'SELECT count(*) FILTER (WHERE used_at IS NULL) AS remaining, min(created_at) AS "generatedAt" FROM recovery_codes WHERE user_id = $1',
+      [userId],
+    );
+    return r.rows[0];
+  }
+
+  async deleteAll(userId: string): Promise<void> {
+    await this.db.query('DELETE FROM recovery_codes WHERE user_id = $1', [userId]);
   }
 }

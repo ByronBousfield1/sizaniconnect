@@ -6,7 +6,8 @@ import { Loading } from './components/ui';
 import { AuthProvider, homeFor, useAuth } from './lib/auth';
 import type { Role } from './lib/types';
 import { AuditPage, SitesPage, UsersPage } from './pages/Admin';
-import { ForgotPasswordPage, LoginPage, ResetPasswordPage } from './pages/Auth';
+import { AccountPage } from './pages/Account';
+import { ForgotPasswordPage, LoginPage, RecoverPage, ResetPasswordPage } from './pages/Auth';
 import { DeskPage } from './pages/Desk';
 import { DonationsPage } from './pages/Donations';
 import { DonorPortalPage, ReceiptPage } from './pages/Donor';
@@ -54,6 +55,7 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/recover" element={<RecoverPage />} />
       <Route path="/" element={<Home />} />
       <Route
         element={
@@ -78,6 +80,7 @@ export function AppRoutes() {
         <Route path="/admin/users" element={<Guard roles={['Admin']}><UsersPage /></Guard>} />
         <Route path="/admin/sites" element={<Guard roles={['Admin']}><SitesPage /></Guard>} />
         <Route path="/admin/audit" element={<Guard roles={['Admin']}><AuditPage /></Guard>} />
+        <Route path="/account" element={<AccountPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

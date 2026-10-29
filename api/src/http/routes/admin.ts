@@ -46,6 +46,11 @@ export function adminRoutes(services: Services) {
     res.json(await services.admin.updateUser(actorOf(req), id, body));
   });
 
+  router.post('/users/:id/reset-link', admin, async (req, res) => {
+    const { id } = parse(idParam, req.params);
+    res.status(201).json(await services.admin.issueResetLink(actorOf(req), id));
+  });
+
   router.get('/sites', requireRole('Admin', 'OperationsManager', 'SiteCoordinator', 'Volunteer'), async (_req, res) => {
     res.json(await services.admin.listSites());
   });
