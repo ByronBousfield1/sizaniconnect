@@ -28,3 +28,14 @@ export function monthRange(month: string): { start: string; end: string } {
   const end = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
   return { start, end };
 }
+
+/** The same instant `months` calendar months later (negative for earlier), clamped to the month's last day. */
+export function addMonthsUtc(at: Date, months: number): Date {
+  const d = new Date(at.getTime());
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, last));
+  return d;
+}

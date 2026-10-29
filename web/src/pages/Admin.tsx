@@ -1,10 +1,13 @@
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import { CellphoneInput } from '../components/CellphoneInput';
 import { Button, ErrorNotice, Loading, Notice, PageHeader, Pill, Select, Table, TextInput } from '../components/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { fmtDateTime, ROLE_LABELS } from '../lib/format';
+import { fmtDate, fmtDateTime, ROLE_LABELS } from '../lib/format';
 import { useAction, useLoad } from '../lib/hooks';
 import type { Paged, Role, Site, User } from '../lib/types';
+import { DEACTIVATION_REASONS, OffboardDialog, type OffboardResult } from './Retention';
 
 const ROLES: Role[] = ['Admin', 'OperationsManager', 'SiteCoordinator', 'Volunteer', 'Donor'];
 
@@ -16,6 +19,9 @@ export function UsersPage() {
   const donors = useLoad(() => api<{ id: string; donorName: string }[]>('/donors'));
   const [form, setForm] = useState({ fullName: '', email: '', phoneNumber: '', role: 'Volunteer' as Role, siteId: '', donorId: '' });
   const [created, setCreated] = useState<{ name: string; link?: string } | null>(null);
+  const [resetFor, setResetFor] = useState<{ name: string; link?: string } | null>(null);
+  const [offboarding, setOffboarding] = useState<User | null>(null);
+  const [offboarded, setOffboarded] = useState<(OffboardResult & { name: string }) | null>(null);
   const create = useAction();
   const update = useAction();
   const fe = create.error?.fieldErrors ?? {};
@@ -34,14 +40,38 @@ export function UsersPage() {
     }
   };
 
-  const toggle = async (u: User) => {
-    const ok = await update.run(() => api(`/users/${u.id}`, { method: 'PATCH', body: { isActive: !u.isActive } }));
-    if (ok) users.reload();
+  const sendReset = async (u: User) => {
+    const res = await update.run(() => api<{ link?: string }>(`/users/${u.id}/reset-link`, { body: {} }));
+    if (res) setResetFor({ name: u.fullName, link: res.link });
+  };
+
+  const reactivate = async (u: User) => {
+    const ok = await update.run(() => api(`/users/${u.id}`, { method: 'PATCH', body: { isActive: true } }));
+    if (ok) {
+      setOffboarded(null);
+      users.reload();
+    }
   };
 
   return (
     <>
       <PageHeader title="Users" lede="New accounts get an emailed link to choose their own password. Nobody, including administrators, ever sees it." />
+      {offboarded ? (
+        <Notice tone="good">
+          <p>
+            {offboarded.name} has been offboarded and signed out everywhere.
+            {offboarded.shiftsReleased ? ` ${offboarded.shiftsReleased} upcoming shift ${offboarded.shiftsReleased === 1 ? 'place was' : 'places were'} freed.` : ''}
+          </p>
+          {offboarded.siteLeftWithoutCoordinator ? (
+            <p>
+              <strong>{offboarded.siteLeftWithoutCoordinator} now has no site coordinator.</strong> Add or assign one before the next distribution day.
+            </p>
+          ) : null}
+          <p>
+            Erase their personal data from <Link to="/admin/retention">Data retention</Link> after {fmtDate(offboarded.erasureDueOn)}.
+          </p>
+        </Notice>
+      ) : null}
       {created ? (
         <Notice tone="good">
           <p>Account created for {created.name}.</p>
@@ -55,16 +85,40 @@ export function UsersPage() {
         </Notice>
       ) : null}
 
+      {resetFor ? (
+        <Notice tone="good">
+          <p>A password reset link was created for {resetFor.name}. It works once and expires in 24 hours.</p>
+          {resetFor.link ? (
+            <p className="small">
+              Email is not configured, so give this link to the person directly (in person or by phone, never in a group chat):
+              <br />
+              <code style={{ wordBreak: 'break-all' }}>{resetFor.link}</code>
+            </p>
+          ) : (
+            <p className="small">It has been emailed to them.</p>
+          )}
+        </Notice>
+      ) : null}
+
       <form className="panel" onSubmit={submit} noValidate>
         <h2>Add a user</h2>
         <ErrorNotice error={create.error} />
         <div className="form-row">
-          <TextInput label="Full name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} error={fe.fullName} />
-          <TextInput label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} error={fe.email} />
-          <TextInput label="Phone" hint="Optional" type="tel" value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} error={fe.phoneNumber} />
+          <TextInput label="Full name" value={form.fullName} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, fullName: value }));
+            }} error={fe.fullName} />
+          <TextInput label="Email" type="email" value={form.email} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, email: value }));
+            }} error={fe.email} />
+          <CellphoneInput value={form.phoneNumber} onChange={(v) => setForm((p) => ({ ...p, phoneNumber: v }))} error={fe.phoneNumber} />
         </div>
         <div className="form-row">
-          <Select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
+          <Select label="Role" value={form.role} onChange={(e) => {
+              const value = e.target.value as Role;
+              setForm((p) => ({ ...p, role: value }));
+            }}>
             {ROLES.map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABELS[r]}
@@ -72,7 +126,10 @@ export function UsersPage() {
             ))}
           </Select>
           {form.role === 'SiteCoordinator' ? (
-            <Select label="Site" value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value })}>
+            <Select label="Site" value={form.siteId} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, siteId: value }));
+            }}>
               <option value="">Choose a site</option>
               {sites.data?.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -82,7 +139,10 @@ export function UsersPage() {
             </Select>
           ) : null}
           {form.role === 'Donor' ? (
-            <Select label="Donor record" value={form.donorId} onChange={(e) => setForm({ ...form, donorId: e.target.value })}>
+            <Select label="Donor record" value={form.donorId} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, donorId: value }));
+            }}>
               <option value="">Choose a donor</option>
               {donors.data?.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -121,12 +181,36 @@ export function UsersPage() {
                   {ROLE_LABELS[u.role]}
                   {u.siteName ? <div className="small muted">{u.siteName}</div> : null}
                 </td>
-                <td>{u.isActive ? <Pill tone="good">Active</Pill> : <Pill tone="neutral">Deactivated</Pill>}</td>
+                <td>
+                  {u.isActive ? (
+                    <Pill tone="good">Active</Pill>
+                  ) : (
+                    <>
+                      <Pill tone="neutral">Offboarded</Pill>
+                      <div className="small muted">
+                        {u.deactivationReason ? DEACTIVATION_REASONS[u.deactivationReason] : ''} {fmtDate(u.deactivatedAt)}
+                      </div>
+                    </>
+                  )}
+                </td>
                 <td>
                   {u.id !== me?.id ? (
-                    <Button kind={u.isActive ? 'danger' : 'quiet'} className="btn-small" busy={update.busy} onClick={() => void toggle(u)}>
-                      {u.isActive ? 'Deactivate' : 'Reactivate'}
-                    </Button>
+                    <span className="row-actions">
+                      {u.isActive ? (
+                        <Button kind="quiet" className="btn-small" busy={update.busy} onClick={() => void sendReset(u)}>
+                          Send reset link
+                        </Button>
+                      ) : null}
+                      {u.isActive ? (
+                        <Button kind="danger" className="btn-small" onClick={() => setOffboarding(u)}>
+                          Offboard
+                        </Button>
+                      ) : (
+                        <Button kind="quiet" className="btn-small" busy={update.busy} onClick={() => void reactivate(u)}>
+                          Reactivate
+                        </Button>
+                      )}
+                    </span>
                   ) : (
                     <span className="small muted">You</span>
                   )}
@@ -136,6 +220,15 @@ export function UsersPage() {
           </tbody>
         </Table>
       ) : null}
+      <OffboardDialog
+        user={offboarding}
+        onClose={() => setOffboarding(null)}
+        onDone={(r) => {
+          setOffboarded({ ...r, name: offboarding!.fullName });
+          setOffboarding(null);
+          users.reload();
+        }}
+      />
     </>
   );
 }
@@ -164,9 +257,18 @@ export function SitesPage() {
         <h2>Add a site</h2>
         <ErrorNotice error={create.error} />
         <div className="form-row">
-          <TextInput label="Site name" value={form.siteName} onChange={(e) => setForm({ ...form, siteName: e.target.value })} error={fe.siteName} />
-          <TextInput label="Suburb" value={form.suburb} onChange={(e) => setForm({ ...form, suburb: e.target.value })} error={fe.suburb} />
-          <TextInput label="Parcels per event, at most" type="number" min={1} value={form.capacityPerEvent} onChange={(e) => setForm({ ...form, capacityPerEvent: e.target.value })} error={fe.capacityPerEvent} />
+          <TextInput label="Site name" value={form.siteName} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, siteName: value }));
+            }} error={fe.siteName} />
+          <TextInput label="Suburb" value={form.suburb} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, suburb: value }));
+            }} error={fe.suburb} />
+          <TextInput label="Parcels per event, at most" type="number" min={1} value={form.capacityPerEvent} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, capacityPerEvent: value }));
+            }} error={fe.capacityPerEvent} />
         </div>
         <Button type="submit" busy={create.busy}>
           Add site

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import { ConnectionBanner } from './ConnectionBanner';
 import { ROLE_LABELS } from '../lib/format';
 import type { Role } from '../lib/types';
 
@@ -23,6 +24,7 @@ const NAV: NavItem[] = [
   { to: '/admin/users', label: 'Users', roles: ['Admin'] },
   { to: '/admin/sites', label: 'Sites', roles: ['Admin'] },
   { to: '/admin/audit', label: 'Audit log', roles: ['Admin'] },
+  { to: '/admin/retention', label: 'Data retention', roles: ['Admin'] },
 ];
 
 export function Layout() {
@@ -74,13 +76,17 @@ export function Layout() {
             {ROLE_LABELS[user.role]}
             {user.siteName ? `, ${user.siteName}` : ''}
           </p>
-          <button type="button" className="link-button" onClick={() => void logout()}>
-            Sign out
-          </button>
+          <p className="whoami-links">
+            <Link to="/account">My account</Link>
+            <button type="button" className="link-button" onClick={() => void logout()}>
+              Sign out
+            </button>
+          </p>
         </div>
       </nav>
 
       <main id="main" className="content" tabIndex={-1}>
+        <ConnectionBanner />
         <Outlet />
       </main>
     </div>

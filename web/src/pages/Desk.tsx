@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { CardScanner } from '../components/CardScanner';
 import { Button, Empty, ErrorNotice, Loading, Notice, PageHeader, Pill, TextArea } from '../components/ui';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { fmtDateTime, fmtQty, fmtTime, HOUSEHOLD_STATUS, todaySA } from '../lib/format';
 import { useAction, useLoad } from '../lib/hooks';
+import { parseScan } from '../lib/scan';
 import type { DistributionEvent, HouseholdStatus, ParcelSize } from '../lib/types';
 
 interface Lookup {
@@ -91,13 +93,19 @@ export function DeskPage() {
     );
   }
 
-  return <Desk event={event} canOverride={can('SiteCoordinator', 'OperationsManager')} />;
+  return <Desk event={event} canOverride={can('SiteCoordinator', 'OperationsManager')} myName={user?.fullName ?? ''} />;
 }
 
-function Desk({ event, canOverride }: { event: DistributionEvent; canOverride: boolean }) {
+function Desk({ event, canOverride, myName }: { event: DistributionEvent; canOverride: boolean; myName: string }) {
   const [code, setCode] = useState('');
   const [found, setFound] = useState<Lookup | null>(null);
   const [lookupError, setLookupError] = useState<ApiError | null>(null);
+  const [scanProblem, setScanProblem] = useState<string | null>(null);
+  const [failedScans, setFailedScans] = useState(0);
+  const [scanning, setScanning] = useState(false);
+  const lostAttempt = useRef(false);
+  const [savedEarlier, setSavedEarlier] = useState<{ name: string; at: string } | null>(null);
+  const canScan = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
   const [recorded, setRecorded] = useState<Recorded | null>(null);
   const [overrideReason, setOverrideReason] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -110,35 +118,81 @@ function Desk({ event, canOverride }: { event: DistributionEvent; canOverride: b
   const reset = () => {
     setFound(null);
     setLookupError(null);
+    setScanProblem(null);
+    setSavedEarlier(null);
     setOverrideReason('');
     record.setError(null);
   };
 
-  const find = async (e: FormEvent) => {
-    e.preventDefault();
+  /**
+   * Every scan or typed code is checked in the browser first. A damaged, foreign or half-typed code
+   * is explained straight away and never sent to the server (acceptance criteria AC-09.3 to AC-09.6).
+   */
+  const lookup = async (raw: string): Promise<string | null> => {
     reset();
     setRecorded(null);
-    const value = code.trim();
-    if (value.length < 6) return;
+    const scan = parseScan(raw);
+    if (!scan.ok) {
+      setScanProblem(scan.message);
+      setFailedScans((n) => n + 1);
+      inputRef.current?.select();
+      return scan.message;
+    }
+    setFailedScans(0);
+    setCode(scan.code);
     setFinding(true);
     try {
-      const result = await api<Lookup>(`/households/by-ref/${encodeURIComponent(value)}`, { query: { eventId: event.id } });
+      const result = await api<Lookup>(`/households/by-ref/${encodeURIComponent(scan.code)}`, { query: { eventId: event.id } });
       setFound(result);
     } catch (err) {
-      setLookupError(err instanceof ApiError ? err : new ApiError(0, 'NETWORK', 'Could not reach the server. Check your connection.'));
+      setLookupError(err instanceof ApiError ? err : new ApiError(0, 'NETWORK', "Can't reach SizaniConnect. Check your mobile data or Wi-Fi, then try again."));
     } finally {
       setFinding(false);
     }
+    return null;
   };
 
+  const find = (e: FormEvent) => {
+    e.preventDefault();
+    void lookup(code);
+  };
+
+  const fromCamera = (raw: string): string | null => {
+    const scan = parseScan(raw);
+    if (!scan.ok) return scan.message;
+    setScanning(false);
+    void lookup(raw);
+    return null;
+  };
+
+  /**
+   * Recording a collection on a bad connection. If the request is lost (no signal, TLS handshake
+   * timeout), nobody can know whether the server saved it, so the volunteer is told to press again.
+   * That is always safe: the database allows one collection per household per event, so a repeat
+   * of a saved attempt comes back as "already collected by you", which is shown as a success.
+   */
   const submit = async (override: boolean) => {
     if (!found) return;
+    const household = found;
     const result = await record.run(() =>
       api<Recorded>('/collections', {
-        body: { eventId: event.id, householdId: found.id, override: override || undefined, overrideReason: override ? overrideReason : undefined },
+        body: { eventId: event.id, householdId: household.id, override: override || undefined, overrideReason: override ? overrideReason : undefined },
+      }).catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 0) lostAttempt.current = true;
+        const by = (err as ApiError)?.details as { verifiedByName?: string; collectedAt?: string } | undefined;
+        if (err instanceof ApiError && err.code === 'DUPLICATE_COLLECTION' && lostAttempt.current && by?.verifiedByName === myName) {
+          lostAttempt.current = false;
+          setSavedEarlier({ name: household.headOfHousehold, at: by.collectedAt ?? '' });
+          setFound(null);
+          setCode('');
+          recent.reload();
+          return undefined;
+        }
+        throw err;
       }),
     );
     if (result) {
+      lostAttempt.current = false;
       setRecorded(result);
       setFound(null);
       setCode('');
@@ -164,7 +218,7 @@ function Desk({ event, canOverride }: { event: DistributionEvent; canOverride: b
           <form className="desk-scan" onSubmit={find} noValidate>
             <label htmlFor="ref">Household reference code</label>
             <p className="field-hint" id="ref-hint">
-              Type the code from the household&rsquo;s slip, or scan it. Letters O, I and L are read as 0 and 1.
+              Scan the household card, or type the code printed on it. Letters O, I and L are read as 0 and 1.
             </p>
             <div className="code-entry">
               <input
@@ -184,11 +238,45 @@ function Desk({ event, canOverride }: { event: DistributionEvent; canOverride: b
                 Find
               </Button>
             </div>
+            {canScan && !scanning ? (
+              <p style={{ margin: 'var(--s-3) 0 0' }}>
+                <Button kind="quiet" onClick={() => {
+                    reset();
+                    setScanning(true);
+                  }}>
+                  Scan card with camera
+                </Button>
+              </p>
+            ) : null}
+            {scanning ? <CardScanner onScan={fromCamera} onClose={() => setScanning(false)} /> : null}
+
+            {scanProblem ? (
+              <div className="verdict verdict-stop" role="alert">
+                <div className="verdict-band">{scanProblem}</div>
+                {failedScans >= 2 ? (
+                  <div className="verdict-body">
+                    <p style={{ margin: 0 }}>
+                      Still not working? Type the reference code printed under the QR code, or search for the household by name on the
+                      Households screen.
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {lookupError ? (
               <div className="verdict verdict-stop" role="alert">
                 <div className="verdict-band">
                   {lookupError.status === 404 ? 'No household has this code. Check the slip and try again.' : lookupError.message}
+                </div>
+              </div>
+            ) : null}
+
+            {savedEarlier ? (
+              <div className="verdict" role="status">
+                <div className="verdict-band">
+                  {savedEarlier.name}: your first try was saved before the connection dropped
+                  {savedEarlier.at ? ` (${fmtTime(savedEarlier.at)})` : ''}. Hand over one parcel only.
                 </div>
               </div>
             ) : null}
@@ -267,6 +355,12 @@ function Desk({ event, canOverride }: { event: DistributionEvent; canOverride: b
                   {eligible && duplicate && !canOverride ? <p style={{ margin: 0 }}>Ask the site coordinator if there is a genuine reason for a second parcel.</p> : null}
                   {!eligible ? <p style={{ margin: 0 }}>Do not issue a parcel.</p> : null}
                   {record.error && record.error.code !== 'OVERRIDE_REASON_REQUIRED' ? <ErrorNotice error={record.error} /> : null}
+                  {record.error?.status === 0 ? (
+                    <p style={{ margin: 0 }}>
+                      Press <strong>Record collection</strong> again when you have signal. If the first try was saved, the desk will say so: a
+                      household can never be recorded twice at one event.
+                    </p>
+                  ) : null}
                   <p style={{ margin: 'var(--s-3) 0 0' }}>
                     <button type="button" className="link-button" onClick={() => {
                         reset();

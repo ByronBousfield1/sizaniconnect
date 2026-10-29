@@ -15,6 +15,11 @@ export function createPool(connectionString: string, ssl: boolean): pg.Pool {
     ssl: ssl ? { rejectUnauthorized: true } : undefined,
     max: 10,
     idleTimeoutMillis: 30_000,
+    // Fail fast instead of hanging a request when the database is unreachable (see db/failures.ts).
+    connectionTimeoutMillis: 5_000,
+    // No single statement may hold a connection for more than 15 seconds (NFR-03 allows 8 for a report).
+    statement_timeout: 15_000,
+    keepAlive: true,
   });
 }
 

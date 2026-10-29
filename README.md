@@ -2,9 +2,12 @@
 
 Food relief operations for **Sizani Community Food Network NPC**, a Johannesburg non-profit running six distribution sites. SizaniConnect replaces paper registers, WhatsApp shift lists and delivery-note spreadsheets with one record: who is registered, what was issued to whom, which stock it came from, and who was on shift.
 
-INSY7315 Information Systems 3E (WIL), Group 13, Task 2: Code and Implementation.
+INSY7315 Information Systems 3E (WIL), Group 13. Release **v1.1.0**, the final system for Task 3.
 
 - **Live site:** <https://sizaniconnect-bb7315.azurewebsites.net> (staging: <https://sizaniconnect-bb7315-staging.azurewebsites.net>)
+- **User guide:** [SizaniConnect-User-Guide.pdf](docs/user-guide/SizaniConnect-User-Guide.pdf), every feature by role, with annotated screenshots
+- **Final report:** [SizaniConnect-Final-Report.pdf](docs/SizaniConnect-Final-Report.pdf), including how the lecturer feedback was applied
+- **Walkthrough video:** [SizaniConnect-Walkthrough.mp4](docs/SizaniConnect-Walkthrough.mp4), about four and a half minutes
 - **Task 2 presentation:** [SizaniConnect-Task2-Presentation.pdf](docs/SizaniConnect-Task2-Presentation.pdf), 16 slides, 14 October 2026
 
 ![The event desk: a volunteer enters a household's reference code and gets an unmistakable verdict](docs/screenshots/event-desk.png)
@@ -13,12 +16,12 @@ INSY7315 Information Systems 3E (WIL), Group 13, Task 2: Code and Implementation
 
 | Role | What they use it for | User stories |
 | --- | --- | --- |
-| Site coordinator | Registers households, runs the event desk, opens, closes and reconciles distribution events at their own site, approves exceptional second parcels | US-01, 02, 04, 09, 10, 11 |
+| Site coordinator | Registers households and prints their QR cards, runs the event desk, opens, closes and reconciles distribution events at their own site, approves exceptional second parcels | US-01, 02, 04, 09, 10, 11, 24 |
 | Operations manager | Verifies households, schedules events, captures donations, manages stock and expiry, produces the monthly report | US-03, 05, 12, 13, 14, 15 |
-| Volunteer | Signs up for shifts, withdraws, checks in, and records collections at the desk | US-06, 07, 08, 09 |
+| Volunteer | Signs up for shifts, withdraws, checks in, and records collections at the desk by scanning a card or typing its code | US-06, 07, 08, 09 |
 | Donor | Sees their donations, the households their goods reached, and printable receipts | US-16, 17 |
-| Administrator | Creates accounts and roles, manages sites, reviews the audit trail | US-18, 19 |
-| Everyone | Signs in, resets a forgotten password by email | US-20 |
+| Administrator | Creates accounts and roles, offboards leavers and erases their personal data, anonymises old households, manages sites, reviews the audit trail | US-18, 19, 22, 23 |
+| Everyone | Signs in, resets a forgotten password by email or with a recovery code, changes their password | US-20, 21 |
 
 The business rules from the Task 1 documentation are enforced in code and, where it matters most, by the database itself:
 
@@ -34,6 +37,9 @@ The business rules from the Task 1 documentation are enforced in code and, where
 | BR-08 archive after 12 months without a collection | `POST /households/archive-inactive` |
 | BR-09 every change to personal data is audited | `audit_log`, append-only by database trigger |
 | BR-10 check-in opens 60 minutes before a shift | `ShiftService.checkIn` |
+| BR-11 South African cellphone numbers, stored as +27... | `domain/phone.ts`, and CHECK constraints (migration 002) |
+| BR-12 leavers are offboarded first and erased only on a separate, confirmed step | `RetentionService`, CHECK constraints (migration 004) |
+| BR-13 archived households are anonymised after 24 months (NFR-16) | Data retention screen, `anonymiseArchivedBefore` |
 
 ## Run it
 
@@ -137,12 +143,13 @@ POPIA: data minimisation (age bands rather than birth dates, no stored ID number
 ## Tests
 
 ```bash
-cd api && npm test            # 115 tests: unit + integration against real PostgreSQL
+cd api && npm test            # 209 tests: unit + integration against real PostgreSQL
 cd api && npm run test:coverage
-cd web && npm test            # component tests for sign-in, role navigation and the event desk
+cd web && npm test            # 33 component tests: sign-in, role navigation, the desk's scan handling, recovery codes, time-outs
+cd e2e && npx playwright test # 26 browser journeys with WCAG 2.1 AA checks (needs the API and web builds and PostgreSQL)
 ```
 
-API coverage of the domain, service and security layers is about 96% (the CI gate is 70%, NFR-18). Integration tests run the real HTTP pipeline against a fresh database per test file, including a race test where two devices record the same household at the same instant.
+API coverage is 96.9% of statements (the CI gate is 70%, NFR-18). Integration tests run the real HTTP pipeline against a fresh database per test file, including a race test where two devices record the same household at the same instant, every migration rolled back and forward, and the app put into each failure state (database unreachable, read-only, connections killed). The end-to-end suite prints a real household card and reads it through a fake camera on a phone slowed six times. Load test results are in [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 ## Branching and CI/CD
 
@@ -164,7 +171,7 @@ gitGraph
 ```
 
 - `main` is production; every release is tagged. `develop` is the integration branch. Work happens on `feature/US-xx-...` branches cut from `develop`, so each branch traces to a user story.
-- **CI** (`.github/workflows/ci.yml`) runs on every push and pull request: lint (including the SQL and XSS rules), type checks, API tests against a PostgreSQL service container with the coverage gate, front-end tests and build, and a dependency audit.
+- **CI** (`.github/workflows/ci.yml`) runs on every push and pull request: lint (including the SQL and XSS rules), type checks, API tests against a PostgreSQL service container with the coverage gate, front-end tests and build, end-to-end and accessibility tests in Chromium, and a dependency audit.
 - **Deploy** (`.github/workflows/deploy.yml`) reruns CI, builds one release package, deploys `develop` to the staging web app and `main` to production (behind an approval on the `production` environment), then smoke-tests `/api/v1/health` until it reports the deployed commit SHA and a live database.
 - **CodeQL** scans every push to `develop` and `main`, and weekly.
 
@@ -176,6 +183,8 @@ All routes are under `/api/v1`. Every route except sign-in, refresh, password re
 | --- | --- | --- |
 | `POST /auth/login`, `/auth/refresh`, `/auth/logout` | Anyone | Session handling |
 | `POST /auth/forgot-password`, `/auth/reset-password` | Anyone | Reset and first-time activation |
+| `POST /auth/recover` | Anyone | Reset with a single-use recovery code |
+| `GET/POST /auth/recovery-codes`, `POST /auth/change-password` | Signed in | Recovery codes; change password |
 | `GET /households`, `POST /households` | Staff | Search, register |
 | `GET /households/by-ref/:code` | Desk roles | Minimal lookup for the event desk |
 | `POST /households/:id/verify` and `/return`, `/resubmit`, `/suspend`, `/reinstate`, `/archive` | By role | Lifecycle |
@@ -190,6 +199,8 @@ All routes are under `/api/v1`. Every route except sign-in, refresh, password re
 | `GET /reports/monthly`, `/reports/monthly.csv` | Ops, Admin | Monthly report |
 | `GET /me/impact` | Donor | Donor portal |
 | `GET /users`, `POST /users`, `GET /audit`, `GET/POST /sites` | Admin | Administration |
+| `POST /users/:id/reset-link`, `/offboard`, `/erase` | Admin | Reset links for others, offboarding, erasure |
+| `GET /retention`, `POST /retention/households/anonymise` | Admin | Data retention (NFR-16) |
 | `GET /health` | Anyone | Liveness, database check and deployed version |
 
 Errors always have the shape `{ "error": { "code", "message", "details" } }`, and the message says what to do next.
@@ -198,7 +209,7 @@ Errors always have the shape `{ "error": { "code", "message", "details" } }`, an
 
 ```
 api/
-  migrations/           SQL migrations, applied at startup under an advisory lock
+  migrations/           SQL migrations, applied at startup under an advisory lock; down/ holds the rollback scripts
   src/domain/           business rules with no I/O
   src/repositories/     SQL, one class per aggregate, plus the Unit of Work
   src/services/         use cases: one service per area
@@ -209,15 +220,20 @@ api/
 web/
   src/pages/            one file per area, screens S1 to S22 from the journey map
   src/components/       layout and the small UI kit
-  src/lib/              API client, auth context, formatting
+  src/lib/              API client (time-outs, retries, connection state), auth context, cellphone and scan parsing
+e2e/                    Playwright end-to-end and accessibility tests
 infra/azure-setup.sh    provisions the Azure resources (safe to re-run)
-docs/                   presentation (PDF), deployment guide, changes from Task 1, presentation notes
+docs/                   user guide, final report, walkthrough video, deployment and failure runbook, performance results, changes from Task 1, Task 2 presentation
 ```
 
 ## Documentation
 
+- [User guide (PDF)](docs/user-guide/SizaniConnect-User-Guide.pdf), also as [Word](docs/user-guide/SizaniConnect-User-Guide.docx)
+- [Final report (PDF)](docs/SizaniConnect-Final-Report.pdf)
+- [Deploying, failures and rollback](docs/DEPLOYMENT.md)
+- [Performance test results](docs/PERFORMANCE.md)
+- [EXPO presentation (PDF)](docs/SizaniConnect-EXPO.pdf)
 - [Task 2 implementation presentation (PDF)](docs/SizaniConnect-Task2-Presentation.pdf)
-- [Deploying to Azure](docs/DEPLOYMENT.md)
 - [Changes from the Task 1 design](docs/CHANGES-FROM-TASK1.md)
 - [Implementation presentation notes](docs/PRESENTATION.md)
 

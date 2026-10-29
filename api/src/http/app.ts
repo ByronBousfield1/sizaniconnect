@@ -26,6 +26,30 @@ export interface AppContext {
   log: Logger;
 }
 
+/**
+ * NFR-14: no credential or personal identifier in a log. Search terms (names, reference codes) and
+ * one-time tokens (activation and reset links) travel in query strings, and the browser repeats the
+ * page address in the Referer header, so request logs keep the path only and no other headers.
+ */
+export const withoutQuery = (url?: string) => (typeof url === 'string' ? url.split('?')[0] : undefined);
+
+interface SerializedRequest {
+  id?: unknown;
+  method?: string;
+  url?: string;
+  remoteAddress?: string;
+  headers?: Record<string, string | string[] | undefined>;
+}
+
+export const logRequest = (req: SerializedRequest) => ({
+  id: req.id,
+  method: req.method,
+  url: withoutQuery(req.url),
+  remoteAddress: req.remoteAddress,
+  referer: withoutQuery(typeof req.headers?.referer === 'string' ? req.headers.referer : undefined),
+  userAgent: req.headers?.['user-agent'],
+});
+
 export function createApp({ config, services, tokens, pool, log }: AppContext) {
   const app = express();
   app.disable('x-powered-by');
@@ -54,6 +78,12 @@ export function createApp({ config, services, tokens, pool, log }: AppContext) {
       referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     }),
   );
+  // The event desk may use the camera to scan household cards; nothing may use the microphone,
+  // location or payment APIs, and no embedded content may ask for the camera.
+  app.use((_req, res, next) => {
+    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), payment=(), usb=()');
+    next();
+  });
   // T-10: a ceiling on requests per IP for every route, including static files and the health check.
   // Generous enough for a whole distribution site sharing one mobile-data address; sign-in has its
   // own much stricter limit in routes/auth.ts.
@@ -68,19 +98,39 @@ export function createApp({ config, services, tokens, pool, log }: AppContext) {
       },
     }),
   );
-  app.use(pinoHttp({ logger: log, autoLogging: { ignore: (req) => req.url === '/api/v1/health' } }));
+  app.use(
+    pinoHttp({
+      logger: log,
+      autoLogging: { ignore: (req) => req.url === '/api/v1/health' },
+      serializers: { req: logRequest, res: (res: { statusCode?: number }) => ({ statusCode: res.statusCode }) },
+    }),
+  );
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
 
   const api = Router();
   const auth = authenticate(tokens);
 
+  /**
+   * Used by the deploy smoke test, the App Service health check and the Docker HEALTHCHECK.
+   *   ok        database reachable and writable
+   *   degraded  database reachable but read-only (Azure does this when storage passes 95%)
+   *   down      database unreachable (503)
+   */
   api.get('/health', async (_req, res) => {
+    const started = Date.now();
     try {
-      await pool.query('SELECT 1');
-      res.json({ status: 'ok', version: config.version, database: 'ok' });
+      const r = await pool.query(`SELECT current_setting('transaction_read_only') AS ro`);
+      const readOnly = r.rows[0].ro === 'on';
+      res.json({
+        status: readOnly ? 'degraded' : 'ok',
+        version: config.version,
+        database: readOnly ? 'read-only' : 'ok',
+        responseMs: Date.now() - started,
+      });
     } catch {
-      res.status(503).json({ status: 'degraded', version: config.version, database: 'unreachable' });
+      res.status(503).setHeader('Retry-After', '30');
+      res.json({ status: 'down', version: config.version, database: 'unreachable' });
     }
   });
 

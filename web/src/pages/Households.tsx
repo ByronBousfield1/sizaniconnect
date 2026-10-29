@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button, Dialog, Empty, ErrorNotice, Loading, Notice, PageHeader, Pill, Select, Table, TextArea, TextInput } from '../components/ui';
+import { CellphoneInput } from '../components/CellphoneInput';
 import { api, download } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { fmtDate, fmtDateTime, HOUSEHOLD_STATUS } from '../lib/format';
+import { fmtDate, fmtDateTime, fmtPhone, HOUSEHOLD_STATUS } from '../lib/format';
 import { useAction, useLoad } from '../lib/hooks';
 import type { Household, HouseholdDetail, HouseholdStatus, Member, Paged, Site } from '../lib/types';
 
@@ -24,8 +25,11 @@ export function HouseholdsPage() {
   const status = (params.get('status') ?? '') as HouseholdStatus | '';
   const page = Number(params.get('page') ?? 1);
   const { can } = useAuth();
+  const [archiving, setArchiving] = useState(false);
+  const [archived, setArchived] = useState<number | null>(null);
+  const archive = useAction();
 
-  const { data, error, loading } = useLoad(
+  const { data, error, loading, reload } = useLoad(
     () => api<Paged<Household>>('/households', { query: { q: params.get('q'), status, page, pageSize: 25 } }),
     [params.toString()],
   );
@@ -48,13 +52,55 @@ export function HouseholdsPage() {
         title="Households"
         lede="Search by name, reference code or suburb."
         actions={
-          can('SiteCoordinator', 'OperationsManager') ? (
-            <Link className="btn btn-primary" to="/households/new">
-              Register a household
-            </Link>
-          ) : null
+          <>
+            {can('SiteCoordinator', 'OperationsManager') ? (
+              <Link className="btn btn-primary" to="/households/new">
+                Register a household
+              </Link>
+            ) : null}
+            {can('OperationsManager', 'Admin') ? (
+              <Button kind="quiet" onClick={() => setArchiving(true)}>
+                Archive inactive households
+              </Button>
+            ) : null}
+          </>
         }
       />
+      {archived !== null ? (
+        <Notice tone="good">
+          <p>
+            {archived === 0
+              ? 'No household has gone 12 months without collecting, so nothing was archived.'
+              : `${archived} ${archived === 1 ? 'household was' : 'households were'} archived after 12 months without a collection.`}
+          </p>
+        </Notice>
+      ) : null}
+      <ErrorNotice error={archive.error} />
+      <Dialog open={archiving} title="Archive inactive households?" onClose={() => setArchiving(false)}>
+        <p>
+          Every active or suspended household that has not collected a parcel in the last 12 months will be archived (BR-08). They can no
+          longer collect, and the person may register again later. Archived households are anonymised 24 months after archiving.
+        </p>
+        <div className="form-actions">
+          <Button
+            busy={archive.busy}
+            onClick={() =>
+              void archive.run(() => api<{ archived: number }>('/households/archive-inactive', { body: {} })).then((r) => {
+                setArchiving(false);
+                if (r) {
+                  setArchived(r.archived);
+                  reload();
+                }
+              })
+            }
+          >
+            Archive them
+          </Button>
+          <Button kind="quiet" onClick={() => setArchiving(false)}>
+            Cancel
+          </Button>
+        </div>
+      </Dialog>
       <form
         className="panel form-row"
         role="search"
@@ -72,7 +118,7 @@ export function HouseholdsPage() {
             </option>
           ))}
         </Select>
-        <div className="field" style={{ alignSelf: 'end' }}>
+        <div className="field">
           <Button type="submit">Search</Button>
         </div>
       </form>
@@ -173,7 +219,7 @@ function MembersEditor({ members, onChange, errors }: { members: Member[]; onCha
             ))}
           </Select>
           {i > 0 ? (
-            <div className="field" style={{ alignSelf: 'end' }}>
+            <div className="field">
               <Button kind="quiet" onClick={() => onChange(members.filter((_, j) => j !== i))} aria-label={`Remove person ${i + 1}`}>
                 Remove
               </Button>
@@ -204,7 +250,10 @@ export function HouseholdNewPage() {
   const [members, setMembers] = useState<Member[]>([{ firstName: '', ageBand: '18-59', dependantType: 'Self' }]);
   const { busy, error, run } = useAction();
   const fe = error?.fieldErrors ?? {};
-  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => {
+    const value = e.target.value;
+    setForm((p) => ({ ...p, [k]: value }));
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -236,7 +285,7 @@ export function HouseholdNewPage() {
             />
           </div>
           <div className="form-row">
-            <TextInput label="Phone number" hint="Optional" type="tel" value={form.contactNumber} onChange={set('contactNumber')} error={fe.contactNumber} />
+            <CellphoneInput value={form.contactNumber} onChange={(v) => setForm((p) => ({ ...p, contactNumber: v }))} error={fe.contactNumber} />
             <Select label="Collects at" value={form.homeSiteId} onChange={set('homeSiteId')} error={fe.homeSiteId} disabled={user?.role === 'SiteCoordinator'}>
               <option value="">Choose a site</option>
               {sites.data?.filter((s) => s.isActive).map((s) => (
@@ -307,9 +356,11 @@ export function HouseholdDetailPage() {
 
   const isOps = user?.role === 'OperationsManager';
   const available: StatusAction[] = [];
+  // Coordinators change households at their own site only (the API enforces the same rule).
+  const mayChange = isOps || (user?.role === 'SiteCoordinator' && user.siteId === h.homeSiteId);
   if (h.status === 'PendingVerification' && isOps) available.push('verify', 'return');
-  if (h.status === 'Draft' && can('SiteCoordinator', 'OperationsManager')) available.push('resubmit');
-  if (h.status === 'Active' && can('SiteCoordinator', 'OperationsManager')) available.push('suspend');
+  if (h.status === 'Draft' && mayChange) available.push('resubmit');
+  if (h.status === 'Active' && mayChange) available.push('suspend');
   if (h.status === 'Suspended' && isOps) available.push('reinstate');
   if ((h.status === 'Active' || h.status === 'Suspended') && can('OperationsManager', 'Admin')) available.push('archive');
 
@@ -348,6 +399,11 @@ export function HouseholdDetailPage() {
                 {ACTION_LABEL[a]}
               </Button>
             ))}
+            {h.status === 'Active' || h.status === 'PendingVerification' ? (
+              <Link className="btn btn-quiet" to={`/households/${h.id}/card`}>
+                Print household card
+              </Link>
+            ) : null}
             {can('OperationsManager', 'Admin') ? (
               <Button kind="quiet" onClick={() => void download(`/households/${h.id}/export`, `household-${h.referenceCode}.json`)}>
                 Export data (POPIA request)
@@ -360,13 +416,21 @@ export function HouseholdDetailPage() {
       {created ? (
         <Notice tone="good">
           <p>
-            Registered. Write <strong className="ref-code">{created}</strong> on the household&rsquo;s collection slip.
+            Registered. <Link to={`/households/${h.id}/card`}>Print the household card</Link>, or write{' '}
+            <strong className="ref-code">{created}</strong> on the household&rsquo;s collection slip.
           </p>
         </Notice>
       ) : null}
       {h.status === 'PendingVerification' && h.registeredByName && isOps ? (
         <Notice tone="warn">
           <p>Verify once you have seen proof of address. The person who registered a household cannot verify it.</p>
+        </Notice>
+      ) : null}
+      {h.anonymisedAt ? (
+        <Notice tone="info">
+          <p>
+            Personal details were removed on {fmtDate(h.anonymisedAt)}, after this household had been archived for 24 months (retention policy, NFR-16). Collection history is kept for reports.
+          </p>
         </Notice>
       ) : null}
       {h.statusReason ? (
@@ -381,9 +445,9 @@ export function HouseholdDetailPage() {
         <section className="panel">
           <div className="panel-head">
             <h2>Details</h2>
-            {can('SiteCoordinator', 'OperationsManager') && ['Draft', 'PendingVerification', 'Active'].includes(h.status) && !editing ? (
+            {mayChange && ['Draft', 'PendingVerification', 'Active'].includes(h.status) && !editing ? (
               <Button kind="quiet" className="btn-small" onClick={() => {
-                  setEdit({ contactNumber: h.contactNumber ?? '', addressLine: h.addressLine, suburb: h.suburb });
+                  setEdit({ contactNumber: h.contactNumber ? fmtPhone(h.contactNumber) : '', addressLine: h.addressLine, suburb: h.suburb });
                   setEditing(true);
                 }}>
                 Edit contact details
@@ -393,9 +457,15 @@ export function HouseholdDetailPage() {
           {editing ? (
             <form onSubmit={saveEdit} noValidate>
               <ErrorNotice error={action.error} />
-              <TextInput label="Phone number" type="tel" value={edit.contactNumber} onChange={(e) => setEdit({ ...edit, contactNumber: e.target.value })} error={action.error?.fieldErrors.contactNumber} />
-              <TextInput label="Street address" value={edit.addressLine} onChange={(e) => setEdit({ ...edit, addressLine: e.target.value })} error={action.error?.fieldErrors.addressLine} />
-              <TextInput label="Suburb" value={edit.suburb} onChange={(e) => setEdit({ ...edit, suburb: e.target.value })} error={action.error?.fieldErrors.suburb} />
+              <CellphoneInput value={edit.contactNumber} onChange={(v) => setEdit((p) => ({ ...p, contactNumber: v }))} error={action.error?.fieldErrors.contactNumber} />
+              <TextInput label="Street address" value={edit.addressLine} onChange={(e) => {
+              const value = e.target.value;
+              setEdit((p) => ({ ...p, addressLine: value }));
+            }} error={action.error?.fieldErrors.addressLine} />
+              <TextInput label="Suburb" value={edit.suburb} onChange={(e) => {
+              const value = e.target.value;
+              setEdit((p) => ({ ...p, suburb: value }));
+            }} error={action.error?.fieldErrors.suburb} />
               <div className="form-actions">
                 <Button type="submit" busy={action.busy}>
                   Save changes
@@ -413,8 +483,8 @@ export function HouseholdDetailPage() {
               </dd>
               <dt>Parcel size</dt>
               <dd>{h.parcelSize}</dd>
-              <dt>Phone</dt>
-              <dd>{h.contactNumber ?? '—'}</dd>
+              <dt>Cellphone</dt>
+              <dd>{fmtPhone(h.contactNumber)}</dd>
               <dt>Address</dt>
               <dd>
                 {h.addressLine}, {h.suburb}

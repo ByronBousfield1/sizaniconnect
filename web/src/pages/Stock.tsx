@@ -235,10 +235,22 @@ function NewItemForm({ onDone, onCancel }: { onDone: () => void; onCancel: () =>
       <h2>Add a stock item</h2>
       <ErrorNotice error={error} />
       <div className="form-row">
-        <TextInput label="Item name" hint="Include the pack size, e.g. Samp 5 kg" value={form.itemName} onChange={(e) => setForm({ ...form, itemName: e.target.value })} error={fe.itemName} />
-        <TextInput label="Category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} error={fe.category} />
-        <TextInput label="Unit" hint="bag, tin, bottle…" value={form.unitOfMeasure} onChange={(e) => setForm({ ...form, unitOfMeasure: e.target.value })} error={fe.unitOfMeasure} />
-        <TextInput label="Reorder level" type="number" min={0} value={form.reorderLevel} onChange={(e) => setForm({ ...form, reorderLevel: e.target.value })} error={fe.reorderLevel} />
+        <TextInput label="Item name" hint="Include the pack size, e.g. Samp 5 kg" value={form.itemName} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, itemName: value }));
+            }} error={fe.itemName} />
+        <TextInput label="Category" value={form.category} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, category: value }));
+            }} error={fe.category} />
+        <TextInput label="Unit" hint="bag, tin, bottle…" value={form.unitOfMeasure} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, unitOfMeasure: value }));
+            }} error={fe.unitOfMeasure} />
+        <TextInput label="Reorder level" type="number" min={0} value={form.reorderLevel} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, reorderLevel: value }));
+            }} error={fe.reorderLevel} />
       </div>
       <div className="form-actions">
         <Button type="submit" busy={busy}>

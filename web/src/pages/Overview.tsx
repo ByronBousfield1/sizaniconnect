@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { EVENT_STATUS, fmtDate } from '../lib/format';
 import { useLoad } from '../lib/hooks';
+import { RecoveryCodesReminder } from './Account';
 import type { EventStatus } from '../lib/types';
 
 interface Dashboard {
@@ -60,6 +61,8 @@ export function OverviewPage() {
           ) : null
         }
       />
+
+      {user?.role === 'Admin' ? <RecoveryCodesReminder /> : null}
 
       <div className="stats">
         <Stat value={data.households.Active ?? 0} label="Active households" tone="good" />

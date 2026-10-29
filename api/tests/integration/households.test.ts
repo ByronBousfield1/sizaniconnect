@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { REFERENCE_CODE_PATTERN } from '../../src/domain/referenceCode.js';
+import { cardPayload, REFERENCE_CODE_PATTERN } from '../../src/domain/referenceCode.js';
 import { createHarness, newSaId, type Harness } from './harness.js';
 
 let h: Harness;
@@ -186,5 +186,64 @@ describe('desk lookup (US-04)', () => {
     const res = await h.as('ops@t.test').post('/api/v1/households/archive-inactive');
     expect(res.body.archived).toBeGreaterThanOrEqual(1);
     expect((await h.as('ops@t.test').get(`/api/v1/households/${id}`)).body.status).toBe('Archived');
+  });
+});
+
+describe('cellphone validation (Task 2 feedback)', () => {
+  it('stores any accepted spelling in one form', async () => {
+    const res = await h.as('coorda@t.test').post('/api/v1/households', body({ contactNumber: '+27 (82) 555-0134' }));
+    expect(res.status).toBe(201);
+    const row = await h.pool.query('SELECT contact_number AS c FROM households WHERE household_id = $1', [res.body.id]);
+    expect(row.rows[0].c).toBe('+27825550134');
+  });
+
+  it('refuses a landline with a field message that says what to do', async () => {
+    const res = await h.as('coorda@t.test').post('/api/v1/households', body({ contactNumber: '011 555 0134' }));
+    expect(res.status).toBe(400);
+    expect(res.body.error.details.fields).toContainEqual({ field: 'contactNumber', message: 'That is a landline number. Enter a cellphone number instead.' });
+  });
+
+  it('allows no number at all', async () => {
+    const res = await h.as('coorda@t.test').post('/api/v1/households', body({ contactNumber: '' }));
+    expect(res.status).toBe(201);
+  });
+
+  it('applies the same rule to staff accounts, and a PATCH without the field leaves the number alone', async () => {
+    const bad = await h.as('admin@t.test').post('/api/v1/users', { fullName: 'Cell Test', email: 'celltest@t.test', phoneNumber: '0800 000 000', role: 'Volunteer' });
+    expect(bad.status).toBe(400);
+    const ok = await h.as('admin@t.test').post('/api/v1/users', { fullName: 'Cell Test', email: 'celltest@t.test', phoneNumber: '072 000 1111', role: 'Volunteer' });
+    expect(ok.status).toBe(201);
+    await h.as('admin@t.test').patch(`/api/v1/users/${ok.body.id}`, { fullName: 'Cell Tested' });
+    const row = await h.pool.query('SELECT phone_number AS p FROM users WHERE user_id = $1', [ok.body.id]);
+    expect(row.rows[0].p).toBe('+27720001111');
+  });
+});
+
+describe('scanning household cards at the desk (US-09)', () => {
+  it('finds a household from its card payload and refuses damaged or foreign scans without searching', async () => {
+    const hh = await h.activeHousehold();
+    const vol = h.as('volone@t.test');
+    const ok = await vol.get(`/api/v1/households/by-ref/${encodeURIComponent(cardPayload(hh.referenceCode))}`);
+    expect(ok.status).toBe(200);
+    expect(ok.body.id).toBe(hh.id);
+
+    const damaged = await vol.get(`/api/v1/households/by-ref/${encodeURIComponent(cardPayload(hh.referenceCode).slice(0, -1) + 'Z')}`);
+    const foreign = await vol.get(`/api/v1/households/by-ref/${encodeURIComponent('https://example.com')}`);
+    // One of the two checks could in theory pass by chance if Z happens to be the right character.
+    if (!cardPayload(hh.referenceCode).endsWith('Z')) expect(damaged.body.error.code).toBe('CARD_UNREADABLE');
+    expect(foreign.body.error.code).toBe('NOT_A_REFERENCE_CODE');
+    expect((await vol.get('/api/v1/households/by-ref/SZN-2026-000000')).status).toBe(404);
+  });
+});
+
+describe('T-04: coordinators change households at their own site only', () => {
+  it('lets coordinator B read a site A household but not edit, suspend or resubmit it', async () => {
+    const hh = await h.activeHousehold();
+    const b = h.as('coordb@t.test');
+    expect((await b.get(`/api/v1/households/${hh.id}`)).status).toBe(200);
+    expect((await b.patch(`/api/v1/households/${hh.id}`, { addressLine: '1 Elsewhere Road' })).status).toBe(403);
+    expect((await b.post(`/api/v1/households/${hh.id}/suspend`, { reason: 'Not my site at all' })).status).toBe(403);
+    // Coordinator A, at the household's own site, may.
+    expect((await h.as('coorda@t.test').post(`/api/v1/households/${hh.id}/suspend`, { reason: 'Checking a concern' })).status).toBe(200);
   });
 });

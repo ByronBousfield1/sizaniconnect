@@ -1,4 +1,4 @@
-import { StrictMode, type ReactNode } from 'react';
+import { lazy, StrictMode, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -6,13 +6,15 @@ import { Loading } from './components/ui';
 import { AuthProvider, homeFor, useAuth } from './lib/auth';
 import type { Role } from './lib/types';
 import { AuditPage, SitesPage, UsersPage } from './pages/Admin';
-import { ForgotPasswordPage, LoginPage, ResetPasswordPage } from './pages/Auth';
+import { AccountPage } from './pages/Account';
+import { ForgotPasswordPage, LoginPage, RecoverPage, ResetPasswordPage } from './pages/Auth';
 import { DeskPage } from './pages/Desk';
 import { DonationsPage } from './pages/Donations';
 import { DonorPortalPage, ReceiptPage } from './pages/Donor';
 import { EventDetailPage, EventsPage } from './pages/Events';
 import { HouseholdDetailPage, HouseholdNewPage, HouseholdsPage } from './pages/Households';
 import { OverviewPage } from './pages/Overview';
+import { RetentionPage } from './pages/Retention';
 import { ReportsPage } from './pages/Reports';
 import { ShiftsPage } from './pages/Shifts';
 import { StockPage } from './pages/Stock';
@@ -45,6 +47,10 @@ function NotFound() {
   );
 }
 
+// The card page carries the QR generator; loading it on demand keeps it out of the bundle every
+// volunteer's phone downloads for the event desk.
+const HouseholdCardPage = lazy(() => import('./pages/HouseholdCard').then((m) => ({ default: m.HouseholdCardPage })));
+
 const STAFF: Role[] = ['Admin', 'OperationsManager', 'SiteCoordinator'];
 const DESK: Role[] = ['SiteCoordinator', 'OperationsManager', 'Volunteer'];
 
@@ -54,6 +60,7 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/recover" element={<RecoverPage />} />
       <Route path="/" element={<Home />} />
       <Route
         element={
@@ -67,6 +74,7 @@ export function AppRoutes() {
         <Route path="/households" element={<Guard roles={STAFF}><HouseholdsPage /></Guard>} />
         <Route path="/households/new" element={<Guard roles={['SiteCoordinator', 'OperationsManager']}><HouseholdNewPage /></Guard>} />
         <Route path="/households/:id" element={<Guard roles={STAFF}><HouseholdDetailPage /></Guard>} />
+        <Route path="/households/:id/card" element={<Guard roles={STAFF}><Suspense fallback={<Loading />}><HouseholdCardPage /></Suspense></Guard>} />
         <Route path="/events" element={<Guard roles={STAFF}><EventsPage /></Guard>} />
         <Route path="/events/:id" element={<Guard roles={[...STAFF, 'Volunteer']}><EventDetailPage /></Guard>} />
         <Route path="/shifts" element={<Guard roles={['Volunteer', 'SiteCoordinator']}><ShiftsPage /></Guard>} />
@@ -78,6 +86,8 @@ export function AppRoutes() {
         <Route path="/admin/users" element={<Guard roles={['Admin']}><UsersPage /></Guard>} />
         <Route path="/admin/sites" element={<Guard roles={['Admin']}><SitesPage /></Guard>} />
         <Route path="/admin/audit" element={<Guard roles={['Admin']}><AuditPage /></Guard>} />
+        <Route path="/admin/retention" element={<Guard roles={['Admin']}><RetentionPage /></Guard>} />
+        <Route path="/account" element={<AccountPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

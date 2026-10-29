@@ -22,7 +22,7 @@ export function useLoad<T>(loader: () => Promise<T>, deps: unknown[] = []) {
         }
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof ApiError ? e : new ApiError(0, 'NETWORK', 'Could not reach the server. Check your connection.'));
+        if (!cancelled) setError(e instanceof ApiError ? e : new ApiError(0, 'NETWORK', "Can't reach SizaniConnect. Check your mobile data or Wi-Fi, then try again."));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -45,7 +45,7 @@ export function useAction() {
     try {
       return await fn();
     } catch (e) {
-      setError(e instanceof ApiError ? e : new ApiError(0, 'NETWORK', 'Could not reach the server. Check your connection.'));
+      setError(e instanceof ApiError ? e : new ApiError(0, 'NETWORK', "Can't reach SizaniConnect. Check your mobile data or Wi-Fi, then try again."));
       return undefined;
     } finally {
       setBusy(false);

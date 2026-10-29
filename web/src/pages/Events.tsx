@@ -90,7 +90,10 @@ function ScheduleForm({ onDone, onCancel }: { onDone: () => void; onCancel: () =
   const [form, setForm] = useState({ siteId: '', scheduledDate: addDays(todaySA(), 7), startTime: '09:00', endTime: '13:00', plannedParcels: '40', minVolunteers: '2' });
   const { busy, error, run } = useAction();
   const fe = error?.fieldErrors ?? {};
-  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => {
+    const value = e.target.value;
+    setForm((p) => ({ ...p, [k]: value }));
+  };
   const site = sites.data?.find((s) => s.id === form.siteId);
 
   const submit = async (e: FormEvent) => {
@@ -370,11 +373,23 @@ export function EventDetailPage() {
       <Dialog open={dialog === 'shift'} title="Add a volunteer shift" onClose={() => setDialog(null)}>
         <form onSubmit={addShift} noValidate>
           <div className="form-row">
-            <TextInput label="Starts" type="time" value={shift.start} onChange={(e) => setShift({ ...shift, start: e.target.value })} />
-            <TextInput label="Ends" type="time" value={shift.end} onChange={(e) => setShift({ ...shift, end: e.target.value })} />
-            <TextInput label="People needed" type="number" min={1} value={shift.needed} onChange={(e) => setShift({ ...shift, needed: e.target.value })} />
+            <TextInput label="Starts" type="time" value={shift.start} onChange={(e) => {
+              const value = e.target.value;
+              setShift((p) => ({ ...p, start: value }));
+            }} />
+            <TextInput label="Ends" type="time" value={shift.end} onChange={(e) => {
+              const value = e.target.value;
+              setShift((p) => ({ ...p, end: value }));
+            }} />
+            <TextInput label="People needed" type="number" min={1} value={shift.needed} onChange={(e) => {
+              const value = e.target.value;
+              setShift((p) => ({ ...p, needed: value }));
+            }} />
           </div>
-          <TextInput label="What they will do" hint="Optional" value={shift.notes} onChange={(e) => setShift({ ...shift, notes: e.target.value })} />
+          <TextInput label="What they will do" hint="Optional" value={shift.notes} onChange={(e) => {
+              const value = e.target.value;
+              setShift((p) => ({ ...p, notes: value }));
+            }} />
           <ErrorNotice error={action.error} />
           <div className="form-actions">
             <Button type="submit" busy={action.busy}>

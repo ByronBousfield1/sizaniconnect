@@ -94,6 +94,9 @@ export function ForgotPasswordPage() {
         </form>
       )}
       <p className="small" style={{ marginTop: '1.5rem' }}>
+        Email not arriving? <Link to="/recover">Use a recovery code instead</Link>.
+      </p>
+      <p className="small" style={{ marginTop: '1.5rem' }}>
         <Link to="/login">Back to sign in</Link>
       </p>
     </AuthShell>
@@ -157,6 +160,97 @@ export function ResetPasswordPage() {
           </Button>
         </form>
       )}
+    </AuthShell>
+  );
+}
+
+/** S2b: reset with a recovery code saved earlier. Needs no email, so an administrator is never stuck. */
+export function RecoverPage() {
+  const [form, setForm] = useState({ email: '', recoveryCode: '', newPassword: '', confirm: '' });
+  const [mismatch, setMismatch] = useState(false);
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const { busy, error, run } = useAction();
+  const fe = error?.fieldErrors ?? {};
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setMismatch(form.newPassword !== form.confirm);
+    if (form.newPassword !== form.confirm) return;
+    const res = await run(() =>
+      api<{ remainingCodes: number }>('/auth/recover', {
+        body: { email: form.email.trim(), recoveryCode: form.recoveryCode, newPassword: form.newPassword },
+      }),
+    );
+    if (res) setRemaining(res.remainingCodes);
+  };
+
+  return (
+    <AuthShell>
+      <h2>Use a recovery code</h2>
+      {remaining !== null ? (
+        <Notice tone="good">
+          <p>Password saved. That code cannot be used again.</p>
+          <p>
+            {remaining === 0
+              ? 'That was your last code. After signing in, create a new set under My account.'
+              : `You have ${remaining} ${remaining === 1 ? 'code' : 'codes'} left.`}
+          </p>
+          <p>
+            <Link to="/login">Sign in now</Link>
+          </p>
+        </Notice>
+      ) : (
+        <form onSubmit={submit} noValidate>
+          <p className="muted">Enter one of the recovery codes you saved when you set up your account, and choose a new password.</p>
+          {error && !Object.keys(fe).length ? <ErrorNotice error={error} /> : null}
+          <TextInput label="Email" type="email" autoComplete="username" value={form.email} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, email: value }));
+            }} error={fe.email} />
+          <TextInput
+            label="Recovery code"
+            hint="Ten letters and numbers, for example 7K2QX-9MDRA"
+            autoComplete="one-time-code"
+            autoCapitalize="characters"
+            spellCheck={false}
+            value={form.recoveryCode}
+            onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, recoveryCode: value }));
+            }}
+            error={fe.recoveryCode}
+          />
+          <TextInput
+            label="New password"
+            hint="At least 12 characters. A short phrase is easier to remember than a jumble."
+            type="password"
+            autoComplete="new-password"
+            value={form.newPassword}
+            onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, newPassword: value }));
+            }}
+            error={fe.newPassword}
+          />
+          <TextInput
+            label="Type it again"
+            type="password"
+            autoComplete="new-password"
+            value={form.confirm}
+            onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, confirm: value }));
+            }}
+            error={mismatch ? 'The two passwords do not match.' : undefined}
+          />
+          <Button type="submit" busy={busy}>
+            Save new password
+          </Button>
+        </form>
+      )}
+      <p className="small" style={{ marginTop: '1.5rem' }}>
+        No codes saved? Ask another administrator to send you a reset link. <Link to="/login">Back to sign in</Link>
+      </p>
     </AuthShell>
   );
 }

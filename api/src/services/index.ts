@@ -6,6 +6,7 @@ import { DonationService } from './donationService.js';
 import { EventService } from './eventService.js';
 import { HouseholdService } from './householdService.js';
 import { ReportService } from './reportService.js';
+import { RetentionService } from './retentionService.js';
 import { ShiftService } from './shiftService.js';
 import { StockService } from './stockService.js';
 
@@ -19,6 +20,7 @@ export interface Services {
   stock: StockService;
   reports: ReportService;
   admin: AdminService;
+  retention: RetentionService;
 }
 
 export function createServices(deps: ServiceDeps): Services {
@@ -32,5 +34,6 @@ export function createServices(deps: ServiceDeps): Services {
     stock: new StockService(deps),
     reports: new ReportService(deps),
     admin: new AdminService(deps),
+    retention: new RetentionService(deps),
   };
 }

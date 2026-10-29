@@ -1,5 +1,6 @@
 import { z, type ZodTypeAny } from 'zod';
 import { badRequest } from '../domain/errors.js';
+import { parseSaCellphone } from '../domain/phone.js';
 
 /** Server-side validation is the security control; the browser's checks are a convenience. */
 export function parse<T extends ZodTypeAny>(schema: T, data: unknown): z.infer<T> {
@@ -37,17 +38,23 @@ export const optionalText = (label: string, max: number) =>
     .optional()
     .transform((v) => (v ? v : null));
 
+/**
+ * Optional South African cellphone number, returned in E.164 form (+27825550134). Blank or null
+ * means "no number"; leaving the field out of a PATCH leaves the stored number alone.
+ */
 export const phone = z
-  .union([
-    z
-      .string()
-      .trim()
-      .regex(/^\+?[0-9 ]{9,15}$/, 'Enter a phone number of 9 to 15 digits, for example 082 555 0134.'),
-    z.literal(''),
-    z.null(),
-  ])
+  .union([z.string(), z.null()])
   .optional()
-  .transform((v) => (v ? v : null));
+  .transform((v, ctx) => {
+    if (v === undefined) return undefined;
+    if (v === null || v.trim() === '') return null;
+    const result = parseSaCellphone(v);
+    if (!result.ok) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: result.message });
+      return z.NEVER;
+    }
+    return result.e164;
+  });
 
 export const uuid = (label = 'ID') => z.string().uuid(`${label} is not valid.`);
 

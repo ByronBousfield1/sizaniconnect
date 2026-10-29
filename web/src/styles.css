@@ -203,6 +203,45 @@ a:hover {
   margin-bottom: var(--s-2) !important;
 }
 
+.whoami-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-4);
+  align-items: center;
+}
+.sidebar .whoami-links a {
+  display: inline-block;
+  padding: var(--s-1) 0;
+  border: 0;
+  text-decoration: underline;
+}
+.sidebar .whoami-links a.active {
+  background: none;
+}
+
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--s-2) var(--s-4);
+  padding-left: 1.5rem;
+  margin: var(--s-4) 0;
+}
+.recovery-codes code {
+  font-size: 1.125rem;
+  letter-spacing: 0.06em;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  justify-content: flex-end;
+}
+
+.inline-form {
+  max-width: 28rem;
+}
+
 .link-button {
   background: none;
   border: 0;
@@ -461,6 +500,33 @@ a:hover {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   gap: 0 var(--s-4);
+}
+/* Fields side by side share their rows (label, hint, input, error), so the inputs line up even
+   when only one of them has a hint. */
+.form-row > .field {
+  grid-row: span 4;
+  grid-template-rows: subgrid;
+  row-gap: var(--s-1);
+  align-content: start;
+}
+.form-row > .field > label {
+  grid-row: 1;
+}
+.form-row > .field > .field-hint {
+  grid-row: 2;
+  align-self: end;
+}
+.form-row > .field > :is(input, select, textarea) {
+  grid-row: 3;
+  align-self: start;
+}
+.form-row > .field > .field-error {
+  grid-row: 4;
+}
+/* A button placed in a form row (such as Search) sits level with the inputs. */
+.form-row > .field > .btn {
+  grid-row: 3;
+  align-self: start;
 }
 
 .form-actions {
@@ -895,7 +961,114 @@ th.num {
 
 /* ------------------------------------------------------------------ print (reports, receipts) */
 
+
+/* ------------------------------------------------------------------ connection banner */
+.connection-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+  margin: 0 0 var(--s-5);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--radius);
+  background: #fff4dc;
+  border: 1px solid #e3b14a;
+  color: var(--ink);
+  font-weight: 700;
+}
+.connection-banner p {
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ card scanner (event desk) */
+.scanner {
+  margin-top: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--s-3);
+  background: var(--surface);
+  color: var(--ink);
+}
+.scanner-view {
+  position: relative;
+  background: #000;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  max-height: 22rem;
+}
+.scanner-view video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.scanner-guide {
+  position: absolute;
+  inset: 18% 22%;
+  border: 3px solid var(--maize);
+  border-radius: 12px;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.35);
+}
+.scanner-status {
+  margin: var(--s-3) 0;
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------------ household card (print) */
+.household-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4mm;
+  width: 85.6mm;
+  height: 54mm;
+  padding: 4mm;
+  border: 1px dashed #000;
+  border-radius: 3mm;
+  background: #fff;
+  color: #000;
+  box-sizing: border-box;
+}
+.household-card svg {
+  width: 30mm;
+  height: 30mm;
+  flex: none;
+}
+.household-card p {
+  margin: 0;
+}
+.household-card-text {
+  display: grid;
+  gap: 1mm;
+  min-width: 0;
+}
+.household-card-brand {
+  font-size: 7pt;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.household-card-name {
+  font-size: 11pt;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.household-card-site,
+.household-card-note {
+  font-size: 7pt;
+}
+.household-card-code {
+  font-size: 12pt;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin: 1mm 0 !important;
+}
+
 @media print {
+  .household-card {
+    break-inside: avoid;
+  }
   .sidebar,
   .topbar,
   .page-actions,

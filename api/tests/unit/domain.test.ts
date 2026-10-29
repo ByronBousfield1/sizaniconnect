@@ -11,8 +11,17 @@ import {
   SmallParcelStrategy,
   type ParcelSizingStrategy,
 } from '../../src/domain/parcel.js';
-import { normaliseReferenceCode, RandomReferenceCodeGenerator, REFERENCE_CODE_PATTERN } from '../../src/domain/referenceCode.js';
+import { formatSaCellphone, parseSaCellphone, SA_CELLPHONE_E164 } from '../../src/domain/phone.js';
+import {
+  cardPayload,
+  checkCharacter,
+  normaliseReferenceCode,
+  parseScan,
+  RandomReferenceCodeGenerator,
+  REFERENCE_CODE_PATTERN,
+} from '../../src/domain/referenceCode.js';
 import { addDays, monthRange, saDate, saDateTime } from '../../src/domain/time.js';
+import { classifyDatabaseFailure } from '../../src/db/failures.js';
 import { syntheticSaId } from '../../src/db/seed.js';
 
 const codeOf = (fn: () => unknown) => {
@@ -202,5 +211,143 @@ describe('time helpers', () => {
   it('computes month ranges and day offsets', () => {
     expect(monthRange('2026-12')).toEqual({ start: '2026-12-01', end: '2027-01-01' });
     expect(addDays('2026-02-27', 2)).toBe('2026-03-01');
+  });
+});
+
+describe('South African cellphone numbers (Task 2 feedback)', () => {
+  it.each([
+    ['082 555 0134', '+27825550134'],
+    ['0825550134', '+27825550134'],
+    ['082-555-0134', '+27825550134'],
+    ['(082) 555 0134', '+27825550134'],
+    ['+27 82 555 0134', '+27825550134'],
+    ['27825550134', '+27825550134'],
+    ['  060 123 4567 ', '+27601234567'],
+    ['071 234 5678', '+27712345678'],
+    ['085 111 2222', '+27851112222'],
+  ])('accepts %s as %s', (raw, e164) => {
+    expect(parseSaCellphone(raw)).toEqual({ ok: true, e164 });
+  });
+
+  it.each([
+    ['011 555 0134', /landline/],
+    ['021 555 0134', /landline/],
+    ['0800 123 456', /not cellphone numbers/],
+    ['086 123 4567', /not cellphone numbers/],
+    ['087 123 4567', /not cellphone numbers/],
+    ['082 555 013', /10 digits/],
+    ['082 555 01345', /10 digits/],
+    ['+44 20 7946 0958', /South African/],
+    ['082 555 O134', /digits only/],
+    ['<script>', /digits only/],
+    ['08+2 555 0134', /\+ sign/],
+    ['089 123 4567', /not a South African cellphone/],
+  ])('refuses %s with a message that says why', (raw, message) => {
+    const r = parseSaCellphone(raw);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.message).toMatch(message);
+  });
+
+  it('every accepted number matches the format the database enforces', () => {
+    for (const raw of ['082 555 0134', '+27 61 000 0000', '079 999 9999']) {
+      const r = parseSaCellphone(raw);
+      expect(r.ok && SA_CELLPHONE_E164.test(r.e164)).toBe(true);
+    }
+  });
+
+  it('formats a stored number for display', () => {
+    expect(formatSaCellphone('+27825550134')).toBe('082 555 0134');
+  });
+});
+
+describe('household card QR payloads: invalid and corrupted scans (Task 1 feedback, US-09)', () => {
+  const code = 'SZN-2026-7K2QX9';
+  const payload = cardPayload(code);
+
+  it('a card holds a short, upper-case payload with a check character', () => {
+    expect(payload).toMatch(/^SZN1:SZN-2026-7K2QX9:[0-9A-HJKMNP-TV-Z]$/);
+    expect(parseScan(payload)).toEqual({ ok: true, code, source: 'card' });
+  });
+
+  it.each([
+    ['SZN-2026-7K2QX9', 'SZN1:SZN-2026-7K2QX9:5'],
+    ['SZN-2026-000000', 'SZN1:SZN-2026-000000:K'],
+    ['SZN-2025-ZZZZZZ', 'SZN1:SZN-2025-ZZZZZZ:V'],
+    ['SZN-2026-ABCDEF', 'SZN1:SZN-2026-ABCDEF:1'],
+  ])('%s prints as %s (the same vectors are tested in web/src/lib/scan.ts copy)', (c, expected) => {
+    expect(cardPayload(c)).toBe(expected);
+  });
+
+  it('reads a card even with the Enter, Tab or lower case a cheap USB scanner adds', () => {
+    expect(parseScan(`${payload.toLowerCase()}\r\n`)).toMatchObject({ ok: true, code });
+    expect(parseScan(`\t${payload}`)).toMatchObject({ ok: true, code });
+  });
+
+  it('catches every single wrong character in the code', () => {
+    const plain = code.replace(/-/g, '');
+    const alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+    let caught = 0;
+    let tried = 0;
+    for (let i = 3; i < plain.length; i++) {
+      for (const c of alphabet) {
+        if (c === plain[i]) continue;
+        const bad = plain.slice(0, i) + c + plain.slice(i + 1);
+        const badCode = `SZN-${bad.slice(3, 7)}-${bad.slice(7)}`;
+        tried++;
+        if (parseScan(`SZN1:${badCode}:${checkCharacter(code)}`).ok === false) caught++;
+      }
+    }
+    expect(caught).toBe(tried);
+  });
+
+  it.each([
+    ['a truncated read', payload.slice(0, 15), 'damaged'],
+    ['a missing check character', `SZN1:${code}`, 'damaged'],
+    ['a wrong check character', `SZN1:${code}:${checkCharacter(code) === 'A' ? 'B' : 'A'}`, 'damaged'],
+    ['two swapped characters', 'SZN1:SZN-2026-K72QX9:' + checkCharacter(code), 'damaged'],
+    ['extra fields', `${payload}:EXTRA`, 'damaged'],
+    ['a card from a future version', `SZN2:${code}:X`, 'foreign'],
+    ['a web address', 'https://example.com/pay?x=1', 'foreign'],
+    ['a product barcode', '6001234567890', 'foreign'],
+    ['far too much text', 'SZN1:' + 'A'.repeat(80), 'too-long'],
+    ['half a typed code', 'SZN-2026', 'incomplete'],
+    ['nothing at all', '  \r\n', 'empty'],
+  ])('refuses %s with a plain message (%s)', (_label, raw, reason) => {
+    const r = parseScan(raw);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason).toBe(reason);
+      expect(r.message.length).toBeGreaterThan(20);
+    }
+  });
+
+  it('still accepts a code typed by hand, forgiving O and I', () => {
+    expect(parseScan('szn 2026 7k2qx9')).toEqual({ ok: true, code, source: 'typed' });
+    expect(parseScan('SZN-2O26-7K2QX9')).toMatchObject({ ok: true, code });
+  });
+});
+
+describe('database failures become plain 503 answers (Task 2 feedback: failure states)', () => {
+  it.each([
+    [{ code: 'ECONNREFUSED' }, 'DATABASE_UNAVAILABLE'],
+    [{ code: '57P01' }, 'DATABASE_UNAVAILABLE'],
+    [{ message: 'Connection terminated unexpectedly' }, 'DATABASE_UNAVAILABLE'],
+    [{ message: 'timeout exceeded when trying to connect' }, 'DATABASE_UNAVAILABLE'],
+    [{ code: '53100' }, 'STORAGE_FULL'],
+    [{ code: '25006' }, 'STORAGE_FULL'],
+    [{ code: '53300' }, 'DATABASE_BUSY'],
+    [{ code: '57014' }, 'DATABASE_TIMEOUT'],
+  ])('%o is %s', (err, code) => {
+    expect(classifyDatabaseFailure(err)?.code).toBe(code);
+  });
+
+  it('leaves ordinary errors alone', () => {
+    expect(classifyDatabaseFailure({ code: '23505' })).toBeNull();
+    expect(classifyDatabaseFailure(new Error('bug'))).toBeNull();
+  });
+
+  it('only storage full is treated as needing a person', () => {
+    expect(classifyDatabaseFailure({ code: '25006' })?.severity).toBe('fatal');
+    expect(classifyDatabaseFailure({ code: 'ECONNREFUSED' })?.severity).toBe('error');
   });
 });

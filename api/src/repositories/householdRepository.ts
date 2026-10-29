@@ -25,6 +25,8 @@ export interface HouseholdRecord {
   registeredOn: Date;
   verifiedOn: Date | null;
   lastCollectedAt: Date | null;
+  archivedAt: Date | null;
+  anonymisedAt: Date | null;
   memberCount: number;
 }
 
@@ -35,6 +37,7 @@ const SELECT_HOUSEHOLD = `
          h.registered_by AS "registeredBy", ru.full_name AS "registeredByName",
          h.verified_by AS "verifiedBy", vu.full_name AS "verifiedByName",
          h.registered_on AS "registeredOn", h.verified_on AS "verifiedOn", h.last_collected_at AS "lastCollectedAt",
+         h.archived_at AS "archivedAt", h.anonymised_at AS "anonymisedAt",
          (SELECT count(*) FROM household_members m WHERE m.household_id = h.household_id) AS "memberCount"
   FROM households h
   JOIN distribution_sites s ON s.site_id = h.home_site_id
@@ -144,7 +147,8 @@ export class HouseholdRepository {
 
   async updateStatus(id: string, status: HouseholdStatus, reason: string | null, verifiedBy?: string): Promise<void> {
     await this.db.query(
-      `UPDATE households SET status = $2, status_reason = $3, updated_at = now(),
+      `UPDATE households SET status = $2::text, status_reason = $3, updated_at = now(),
+              archived_at = CASE WHEN $2::text = 'Archived' THEN now() END,
               verified_by = COALESCE($4, verified_by),
               verified_on = CASE WHEN $4::uuid IS NOT NULL THEN now() ELSE verified_on END
        WHERE household_id = $1`,
@@ -185,12 +189,47 @@ export class HouseholdRepository {
   /** BR-08: households with no collection (or registration) in 12 months are archived. */
   async archiveInactive(): Promise<string[]> {
     const r = await this.db.query(
-      `UPDATE households SET status = 'Archived', status_reason = 'No collection in 12 months', updated_at = now()
+      `UPDATE households SET status = 'Archived', status_reason = 'No collection in 12 months', updated_at = now(), archived_at = now()
        WHERE status IN ('Active','Suspended')
          AND COALESCE(last_collected_at, registered_on) < now() - interval '12 months'
        RETURNING household_id AS id`,
     );
     return r.rows.map((row) => row.id);
+  }
+
+  /** NFR-16: archived households whose retention period ended before `cutoff`, oldest first. */
+  async retentionDue(cutoff: Date, limit: number) {
+    const r = await this.db.query(
+      `SELECT h.household_id AS id, h.reference_code AS "referenceCode", h.suburb, h.archived_at AS "archivedAt",
+              count(*) OVER () AS total
+       FROM households h
+       WHERE h.status = 'Archived' AND h.anonymised_at IS NULL AND h.archived_at <= $1
+       ORDER BY h.archived_at
+       LIMIT $2`,
+      [cutoff, limit],
+    );
+    return { total: (r.rows[0]?.total as number) ?? 0, items: r.rows.map(({ total: _t, ...row }) => row) };
+  }
+
+  /**
+   * Clears every field that identifies a person. What is left (reference code, suburb, age bands,
+   * collection dates and parcel sizes) still adds up in reports but points at nobody.
+   */
+  async anonymiseArchivedBefore(cutoff: Date, at: Date): Promise<string[]> {
+    const r = await this.db.query(
+      `UPDATE households SET head_of_household = 'Anonymised household', id_number_hash = NULL, contact_number = NULL,
+              address_line = 'Removed under the retention policy', status_reason = NULL, anonymised_at = $2, updated_at = $2
+       WHERE status = 'Archived' AND anonymised_at IS NULL AND archived_at <= $1
+       RETURNING household_id AS id`,
+      [cutoff, at],
+    );
+    const ids = r.rows.map((row) => row.id as string);
+    if (ids.length) await this.db.query(`UPDATE household_members SET first_name = 'Removed' WHERE household_id = ANY($1)`, [ids]);
+    return ids;
+  }
+
+  async countAnonymised(): Promise<number> {
+    return (await this.db.query('SELECT count(*) AS n FROM households WHERE anonymised_at IS NOT NULL')).rows[0].n;
   }
 
   async recentCollections(householdId: string, limit = 10) {
