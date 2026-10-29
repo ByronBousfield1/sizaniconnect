@@ -26,6 +26,30 @@ export interface AppContext {
   log: Logger;
 }
 
+/**
+ * NFR-14: no credential or personal identifier in a log. Search terms (names, reference codes) and
+ * one-time tokens (activation and reset links) travel in query strings, and the browser repeats the
+ * page address in the Referer header, so request logs keep the path only and no other headers.
+ */
+export const withoutQuery = (url?: string) => (typeof url === 'string' ? url.split('?')[0] : undefined);
+
+interface SerializedRequest {
+  id?: unknown;
+  method?: string;
+  url?: string;
+  remoteAddress?: string;
+  headers?: Record<string, string | string[] | undefined>;
+}
+
+export const logRequest = (req: SerializedRequest) => ({
+  id: req.id,
+  method: req.method,
+  url: withoutQuery(req.url),
+  remoteAddress: req.remoteAddress,
+  referer: withoutQuery(typeof req.headers?.referer === 'string' ? req.headers.referer : undefined),
+  userAgent: req.headers?.['user-agent'],
+});
+
 export function createApp({ config, services, tokens, pool, log }: AppContext) {
   const app = express();
   app.disable('x-powered-by');
@@ -74,7 +98,13 @@ export function createApp({ config, services, tokens, pool, log }: AppContext) {
       },
     }),
   );
-  app.use(pinoHttp({ logger: log, autoLogging: { ignore: (req) => req.url === '/api/v1/health' } }));
+  app.use(
+    pinoHttp({
+      logger: log,
+      autoLogging: { ignore: (req) => req.url === '/api/v1/health' },
+      serializers: { req: logRequest, res: (res: { statusCode?: number }) => ({ statusCode: res.statusCode }) },
+    }),
+  );
   app.use(express.json({ limit: '100kb' }));
   app.use(cookieParser());
 
