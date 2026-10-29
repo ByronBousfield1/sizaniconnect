@@ -935,6 +935,25 @@ th.num {
 /* ------------------------------------------------------------------ print (reports, receipts) */
 
 
+/* ------------------------------------------------------------------ connection banner */
+.connection-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-4);
+  margin: 0 0 var(--s-5);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--radius);
+  background: #fff4dc;
+  border: 1px solid #e3b14a;
+  color: var(--ink);
+  font-weight: 700;
+}
+.connection-banner p {
+  margin: 0;
+}
+
 /* ------------------------------------------------------------------ card scanner (event desk) */
 .scanner {
   margin-top: var(--s-4);

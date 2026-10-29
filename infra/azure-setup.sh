@@ -4,7 +4,12 @@
 #   - Azure Database for PostgreSQL Flexible Server (Burstable B1ms), TLS required, with its
 #     firewall open only to the two web apps' outbound IP addresses
 #
+# Also sets up what keeps it running: storage that grows before it fills (Azure makes a full server
+# read-only), an App Service health check on /api/v1/health, and, if ALERT_EMAIL is given, an email
+# when database storage passes 80%.
+#
 # Run in Azure Cloud Shell (Bash):  SUFFIX=yourinitials7315 bash infra/azure-setup.sh
+# With an alert:                    ALERT_EMAIL=you@example.com SUFFIX=... bash infra/azure-setup.sh
 # Safe to re-run: existing resources are reused, and the database password and app secrets are
 # regenerated and written to the web apps together, so they always match.
 set -euo pipefail
@@ -39,6 +44,9 @@ else
 fi
 # Public endpoint on, but the firewall (set at the end) admits only the web apps.
 az postgres flexible-server update -g "$RG" -n "$PG" --public-access Enabled -o none
+# Storage grows automatically before it fills. Without this, Azure switches a full server to
+# read-only and every save fails with STORAGE_FULL (see docs/DEPLOYMENT.md, section 5).
+az postgres flexible-server update -g "$RG" -n "$PG" --storage-auto-grow Enabled -o none
 
 for db in sizani_production sizani_staging; do
   az postgres flexible-server db show -g "$RG" --server-name "$PG" --name "$db" -o none 2>/dev/null \
@@ -57,6 +65,8 @@ configure_app () {
   az webapp config set -g "$RG" -n "$app" \
     --startup-file "npm start" --always-on true --http20-enabled true \
     --min-tls-version 1.2 --ftps-state Disabled -o none
+  # App Service polls this; an instance that keeps failing it is restarted.
+  az webapp config set -g "$RG" -n "$app" --generic-configurations '{"healthCheckPath": "/api/v1/health"}' -o none
   az webapp config appsettings set -g "$RG" -n "$app" -o none --settings \
     NODE_ENV=production \
     DATABASE_URL="postgresql://${PG_ADMIN}:${PG_PASSWORD}@${PG_HOST}:5432/${db}" \
@@ -86,6 +96,17 @@ for ip in $( (az webapp show -g "$RG" -n "$APP_PROD" --query outboundIpAddresses
   az postgres flexible-server firewall-rule create -g "$RG" --server-name "$PG" \
     --name "webapp-${n}" --start-ip-address "$ip" --end-ip-address "$ip" -o none
 done
+
+# ----------------------------------------------------------------------------- alert (optional)
+if [ -n "${ALERT_EMAIL:-}" ]; then
+  echo "Emailing ${ALERT_EMAIL} when database storage passes 80%"
+  az monitor action-group create -g "$RG" -n ag-sizaniconnect --short-name sizani \
+    --action email operations "$ALERT_EMAIL" -o none
+  az monitor metrics alert create -g "$RG" -n pg-storage-over-80 \
+    --scopes "$(az postgres flexible-server show -g "$RG" -n "$PG" --query id -o tsv)" \
+    --condition "avg storage_percent > 80" --window-size 15m --evaluation-frequency 5m \
+    --action ag-sizaniconnect --description "SizaniConnect database storage above 80%" -o none
+fi
 
 cat <<DONE
 

@@ -21,6 +21,7 @@ import {
   REFERENCE_CODE_PATTERN,
 } from '../../src/domain/referenceCode.js';
 import { addDays, monthRange, saDate, saDateTime } from '../../src/domain/time.js';
+import { classifyDatabaseFailure } from '../../src/db/failures.js';
 import { syntheticSaId } from '../../src/db/seed.js';
 
 const codeOf = (fn: () => unknown) => {
@@ -323,5 +324,30 @@ describe('household card QR payloads: invalid and corrupted scans (Task 1 feedba
   it('still accepts a code typed by hand, forgiving O and I', () => {
     expect(parseScan('szn 2026 7k2qx9')).toEqual({ ok: true, code, source: 'typed' });
     expect(parseScan('SZN-2O26-7K2QX9')).toMatchObject({ ok: true, code });
+  });
+});
+
+describe('database failures become plain 503 answers (Task 2 feedback: failure states)', () => {
+  it.each([
+    [{ code: 'ECONNREFUSED' }, 'DATABASE_UNAVAILABLE'],
+    [{ code: '57P01' }, 'DATABASE_UNAVAILABLE'],
+    [{ message: 'Connection terminated unexpectedly' }, 'DATABASE_UNAVAILABLE'],
+    [{ message: 'timeout exceeded when trying to connect' }, 'DATABASE_UNAVAILABLE'],
+    [{ code: '53100' }, 'STORAGE_FULL'],
+    [{ code: '25006' }, 'STORAGE_FULL'],
+    [{ code: '53300' }, 'DATABASE_BUSY'],
+    [{ code: '57014' }, 'DATABASE_TIMEOUT'],
+  ])('%o is %s', (err, code) => {
+    expect(classifyDatabaseFailure(err)?.code).toBe(code);
+  });
+
+  it('leaves ordinary errors alone', () => {
+    expect(classifyDatabaseFailure({ code: '23505' })).toBeNull();
+    expect(classifyDatabaseFailure(new Error('bug'))).toBeNull();
+  });
+
+  it('only storage full is treated as needing a person', () => {
+    expect(classifyDatabaseFailure({ code: '25006' })?.severity).toBe('fatal');
+    expect(classifyDatabaseFailure({ code: 'ECONNREFUSED' })?.severity).toBe('error');
   });
 });
