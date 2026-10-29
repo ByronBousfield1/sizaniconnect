@@ -235,3 +235,15 @@ describe('scanning household cards at the desk (US-09)', () => {
     expect((await vol.get('/api/v1/households/by-ref/SZN-2026-000000')).status).toBe(404);
   });
 });
+
+describe('T-04: coordinators change households at their own site only', () => {
+  it('lets coordinator B read a site A household but not edit, suspend or resubmit it', async () => {
+    const hh = await h.activeHousehold();
+    const b = h.as('coordb@t.test');
+    expect((await b.get(`/api/v1/households/${hh.id}`)).status).toBe(200);
+    expect((await b.patch(`/api/v1/households/${hh.id}`, { addressLine: '1 Elsewhere Road' })).status).toBe(403);
+    expect((await b.post(`/api/v1/households/${hh.id}/suspend`, { reason: 'Not my site at all' })).status).toBe(403);
+    // Coordinator A, at the household's own site, may.
+    expect((await h.as('coorda@t.test').post(`/api/v1/households/${hh.id}/suspend`, { reason: 'Checking a concern' })).status).toBe(200);
+  });
+});
