@@ -78,6 +78,52 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  e2e:
+    name: End-to-end and accessibility
+    # A real browser against the built app and a freshly seeded database: user journeys for every
+    # role, the event-desk acceptance criteria (including damaged QR scans and camera scanning on a
+    # CPU-throttled phone), failure handling, and WCAG 2.1 AA checks with axe-core (NFR-10).
+    needs: [api, web]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sizani
+          POSTGRES_PASSWORD: sizani
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U sizani"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      E2E_DATABASE_URL: postgresql://sizani:sizani@localhost:5432/sizani_e2e
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Build the API and the web app
+        run: |
+          (cd api && npm ci && npm run build)
+          (cd web && npm ci && npm run build)
+      - name: Install Chromium, and ffmpeg for the fake camera feed
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Run the browser tests
+        working-directory: e2e
+        run: npx playwright test
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          retention-days: 14
+
   dependencies:
     name: Dependency audit (T-11)
     runs-on: ubuntu-latest
