@@ -250,7 +250,10 @@ export function HouseholdNewPage() {
   const [members, setMembers] = useState<Member[]>([{ firstName: '', ageBand: '18-59', dependantType: 'Self' }]);
   const { busy, error, run } = useAction();
   const fe = error?.fieldErrors ?? {};
-  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
+  const set = (k: keyof typeof form) => (e: { target: { value: string } }) => {
+    const value = e.target.value;
+    setForm((p) => ({ ...p, [k]: value }));
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -282,7 +285,7 @@ export function HouseholdNewPage() {
             />
           </div>
           <div className="form-row">
-            <CellphoneInput value={form.contactNumber} onChange={(v) => setForm({ ...form, contactNumber: v })} error={fe.contactNumber} />
+            <CellphoneInput value={form.contactNumber} onChange={(v) => setForm((p) => ({ ...p, contactNumber: v }))} error={fe.contactNumber} />
             <Select label="Collects at" value={form.homeSiteId} onChange={set('homeSiteId')} error={fe.homeSiteId} disabled={user?.role === 'SiteCoordinator'}>
               <option value="">Choose a site</option>
               {sites.data?.filter((s) => s.isActive).map((s) => (
@@ -454,9 +457,15 @@ export function HouseholdDetailPage() {
           {editing ? (
             <form onSubmit={saveEdit} noValidate>
               <ErrorNotice error={action.error} />
-              <CellphoneInput value={edit.contactNumber} onChange={(v) => setEdit({ ...edit, contactNumber: v })} error={action.error?.fieldErrors.contactNumber} />
-              <TextInput label="Street address" value={edit.addressLine} onChange={(e) => setEdit({ ...edit, addressLine: e.target.value })} error={action.error?.fieldErrors.addressLine} />
-              <TextInput label="Suburb" value={edit.suburb} onChange={(e) => setEdit({ ...edit, suburb: e.target.value })} error={action.error?.fieldErrors.suburb} />
+              <CellphoneInput value={edit.contactNumber} onChange={(v) => setEdit((p) => ({ ...p, contactNumber: v }))} error={action.error?.fieldErrors.contactNumber} />
+              <TextInput label="Street address" value={edit.addressLine} onChange={(e) => {
+              const value = e.target.value;
+              setEdit((p) => ({ ...p, addressLine: value }));
+            }} error={action.error?.fieldErrors.addressLine} />
+              <TextInput label="Suburb" value={edit.suburb} onChange={(e) => {
+              const value = e.target.value;
+              setEdit((p) => ({ ...p, suburb: value }));
+            }} error={action.error?.fieldErrors.suburb} />
               <div className="form-actions">
                 <Button type="submit" busy={action.busy}>
                   Save changes

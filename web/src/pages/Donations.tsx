@@ -156,13 +156,22 @@ function CaptureForm({ onDone, onCancel }: { onDone: (receipt: string) => void; 
       </div>
       {donorId === 'new' ? (
         <div className="form-row">
-          <TextInput label="Donor name" value={newDonor.donorName} onChange={(e) => setNewDonor({ ...newDonor, donorName: e.target.value })} />
-          <Select label="Donor type" value={newDonor.donorType} onChange={(e) => setNewDonor({ ...newDonor, donorType: e.target.value })}>
+          <TextInput label="Donor name" value={newDonor.donorName} onChange={(e) => {
+              const value = e.target.value;
+              setNewDonor((p) => ({ ...p, donorName: value }));
+            }} />
+          <Select label="Donor type" value={newDonor.donorType} onChange={(e) => {
+              const value = e.target.value;
+              setNewDonor((p) => ({ ...p, donorType: value }));
+            }}>
             {['Individual', 'Corporate', 'Trust', 'Government'].map((t) => (
               <option key={t}>{t}</option>
             ))}
           </Select>
-          <TextInput label="Email for receipts" hint="Optional" type="email" value={newDonor.contactEmail} onChange={(e) => setNewDonor({ ...newDonor, contactEmail: e.target.value })} />
+          <TextInput label="Email for receipts" hint="Optional" type="email" value={newDonor.contactEmail} onChange={(e) => {
+              const value = e.target.value;
+              setNewDonor((p) => ({ ...p, contactEmail: value }));
+            }} />
         </div>
       ) : null}
 

@@ -203,7 +203,10 @@ export function RecoverPage() {
         <form onSubmit={submit} noValidate>
           <p className="muted">Enter one of the recovery codes you saved when you set up your account, and choose a new password.</p>
           {error && !Object.keys(fe).length ? <ErrorNotice error={error} /> : null}
-          <TextInput label="Email" type="email" autoComplete="username" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} error={fe.email} />
+          <TextInput label="Email" type="email" autoComplete="username" value={form.email} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, email: value }));
+            }} error={fe.email} />
           <TextInput
             label="Recovery code"
             hint="Ten letters and numbers, for example 7K2QX-9MDRA"
@@ -211,7 +214,10 @@ export function RecoverPage() {
             autoCapitalize="characters"
             spellCheck={false}
             value={form.recoveryCode}
-            onChange={(e) => setForm({ ...form, recoveryCode: e.target.value })}
+            onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, recoveryCode: value }));
+            }}
             error={fe.recoveryCode}
           />
           <TextInput
@@ -220,7 +226,10 @@ export function RecoverPage() {
             type="password"
             autoComplete="new-password"
             value={form.newPassword}
-            onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
+            onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, newPassword: value }));
+            }}
             error={fe.newPassword}
           />
           <TextInput
@@ -228,7 +237,10 @@ export function RecoverPage() {
             type="password"
             autoComplete="new-password"
             value={form.confirm}
-            onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+            onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, confirm: value }));
+            }}
             error={mismatch ? 'The two passwords do not match.' : undefined}
           />
           <Button type="submit" busy={busy}>

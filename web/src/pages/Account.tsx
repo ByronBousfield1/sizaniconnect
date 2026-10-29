@@ -76,7 +76,10 @@ function ChangePassword() {
         type="password"
         autoComplete="current-password"
         value={form.currentPassword}
-        onChange={(e) => setForm({ ...form, currentPassword: e.target.value })}
+        onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, currentPassword: value }));
+            }}
         error={fe.currentPassword}
       />
       <TextInput
@@ -85,7 +88,10 @@ function ChangePassword() {
         type="password"
         autoComplete="new-password"
         value={form.newPassword}
-        onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
+        onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, newPassword: value }));
+            }}
         error={fe.newPassword}
       />
       <TextInput
@@ -93,7 +99,10 @@ function ChangePassword() {
         type="password"
         autoComplete="new-password"
         value={form.confirm}
-        onChange={(e) => setForm({ ...form, confirm: e.target.value })}
+        onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, confirm: value }));
+            }}
         error={mismatch ? 'The two passwords do not match.' : undefined}
       />
       <Button type="submit" busy={busy}>

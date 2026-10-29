@@ -104,12 +104,21 @@ export function UsersPage() {
         <h2>Add a user</h2>
         <ErrorNotice error={create.error} />
         <div className="form-row">
-          <TextInput label="Full name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} error={fe.fullName} />
-          <TextInput label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} error={fe.email} />
-          <CellphoneInput value={form.phoneNumber} onChange={(v) => setForm({ ...form, phoneNumber: v })} error={fe.phoneNumber} />
+          <TextInput label="Full name" value={form.fullName} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, fullName: value }));
+            }} error={fe.fullName} />
+          <TextInput label="Email" type="email" value={form.email} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, email: value }));
+            }} error={fe.email} />
+          <CellphoneInput value={form.phoneNumber} onChange={(v) => setForm((p) => ({ ...p, phoneNumber: v }))} error={fe.phoneNumber} />
         </div>
         <div className="form-row">
-          <Select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>
+          <Select label="Role" value={form.role} onChange={(e) => {
+              const value = e.target.value as Role;
+              setForm((p) => ({ ...p, role: value }));
+            }}>
             {ROLES.map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABELS[r]}
@@ -117,7 +126,10 @@ export function UsersPage() {
             ))}
           </Select>
           {form.role === 'SiteCoordinator' ? (
-            <Select label="Site" value={form.siteId} onChange={(e) => setForm({ ...form, siteId: e.target.value })}>
+            <Select label="Site" value={form.siteId} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, siteId: value }));
+            }}>
               <option value="">Choose a site</option>
               {sites.data?.map((s) => (
                 <option key={s.id} value={s.id}>
@@ -127,7 +139,10 @@ export function UsersPage() {
             </Select>
           ) : null}
           {form.role === 'Donor' ? (
-            <Select label="Donor record" value={form.donorId} onChange={(e) => setForm({ ...form, donorId: e.target.value })}>
+            <Select label="Donor record" value={form.donorId} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, donorId: value }));
+            }}>
               <option value="">Choose a donor</option>
               {donors.data?.map((d) => (
                 <option key={d.id} value={d.id}>
@@ -242,9 +257,18 @@ export function SitesPage() {
         <h2>Add a site</h2>
         <ErrorNotice error={create.error} />
         <div className="form-row">
-          <TextInput label="Site name" value={form.siteName} onChange={(e) => setForm({ ...form, siteName: e.target.value })} error={fe.siteName} />
-          <TextInput label="Suburb" value={form.suburb} onChange={(e) => setForm({ ...form, suburb: e.target.value })} error={fe.suburb} />
-          <TextInput label="Parcels per event, at most" type="number" min={1} value={form.capacityPerEvent} onChange={(e) => setForm({ ...form, capacityPerEvent: e.target.value })} error={fe.capacityPerEvent} />
+          <TextInput label="Site name" value={form.siteName} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, siteName: value }));
+            }} error={fe.siteName} />
+          <TextInput label="Suburb" value={form.suburb} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, suburb: value }));
+            }} error={fe.suburb} />
+          <TextInput label="Parcels per event, at most" type="number" min={1} value={form.capacityPerEvent} onChange={(e) => {
+              const value = e.target.value;
+              setForm((p) => ({ ...p, capacityPerEvent: value }));
+            }} error={fe.capacityPerEvent} />
         </div>
         <Button type="submit" busy={create.busy}>
           Add site
