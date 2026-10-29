@@ -17,7 +17,7 @@ describe('requests on a bad connection', () => {
   it('never repeats a write behind the person’s back, and says it may or may not have been saved', async () => {
     const fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
     vi.stubGlobal('fetch', fetch);
-    const err = await api('/collections', { body: { x: 1 } }).catch((e) => e as ApiError);
+    const err = (await api('/collections', { body: { x: 1 } }).catch((e: unknown) => e)) as ApiError;
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(err).toMatchObject({ status: 0, code: 'NETWORK' });
     expect(err.message).toMatch(/may or may not have been saved/);
@@ -32,7 +32,7 @@ describe('requests on a bad connection', () => {
           new Promise((_resolve, reject) => init.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))),
       ),
     );
-    const err = await api('/collections', { body: {}, timeoutMs: 20 }).catch((e) => e as ApiError);
+    const err = (await api('/collections', { body: {}, timeoutMs: 20 }).catch((e: unknown) => e)) as ApiError;
     expect(err).toMatchObject({ status: 0, code: 'TIMEOUT' });
   });
 
@@ -43,7 +43,7 @@ describe('requests on a bad connection', () => {
         headers: { 'Content-Type': 'application/json', 'Retry-After': '30' },
       });
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => down()));
-    const err = await api('/households').catch((e) => e as ApiError);
+    const err = (await api('/households').catch((e: unknown) => e)) as ApiError;
     expect(err).toMatchObject({ status: 503, code: 'DATABASE_UNAVAILABLE' });
   });
 });
