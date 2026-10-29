@@ -39,8 +39,8 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://sizani:sizani@localhost:5432/sizani_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -51,7 +51,7 @@ jobs:
       - run: npm run typecheck
       - name: Tests against real PostgreSQL, with the 70% coverage gate (NFR-18)
         run: npm run test:coverage
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: api-coverage
@@ -65,8 +65,8 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -82,8 +82,8 @@ jobs:
     name: Dependency audit (T-11)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Fail on high or critical advisories in production dependencies
