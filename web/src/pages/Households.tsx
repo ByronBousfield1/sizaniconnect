@@ -25,8 +25,11 @@ export function HouseholdsPage() {
   const status = (params.get('status') ?? '') as HouseholdStatus | '';
   const page = Number(params.get('page') ?? 1);
   const { can } = useAuth();
+  const [archiving, setArchiving] = useState(false);
+  const [archived, setArchived] = useState<number | null>(null);
+  const archive = useAction();
 
-  const { data, error, loading } = useLoad(
+  const { data, error, loading, reload } = useLoad(
     () => api<Paged<Household>>('/households', { query: { q: params.get('q'), status, page, pageSize: 25 } }),
     [params.toString()],
   );
@@ -49,13 +52,55 @@ export function HouseholdsPage() {
         title="Households"
         lede="Search by name, reference code or suburb."
         actions={
-          can('SiteCoordinator', 'OperationsManager') ? (
-            <Link className="btn btn-primary" to="/households/new">
-              Register a household
-            </Link>
-          ) : null
+          <>
+            {can('SiteCoordinator', 'OperationsManager') ? (
+              <Link className="btn btn-primary" to="/households/new">
+                Register a household
+              </Link>
+            ) : null}
+            {can('OperationsManager', 'Admin') ? (
+              <Button kind="quiet" onClick={() => setArchiving(true)}>
+                Archive inactive households
+              </Button>
+            ) : null}
+          </>
         }
       />
+      {archived !== null ? (
+        <Notice tone="good">
+          <p>
+            {archived === 0
+              ? 'No household has gone 12 months without collecting, so nothing was archived.'
+              : `${archived} ${archived === 1 ? 'household was' : 'households were'} archived after 12 months without a collection.`}
+          </p>
+        </Notice>
+      ) : null}
+      <ErrorNotice error={archive.error} />
+      <Dialog open={archiving} title="Archive inactive households?" onClose={() => setArchiving(false)}>
+        <p>
+          Every active or suspended household that has not collected a parcel in the last 12 months will be archived (BR-08). They can no
+          longer collect, and the person may register again later. Archived households are anonymised 24 months after archiving.
+        </p>
+        <div className="form-actions">
+          <Button
+            busy={archive.busy}
+            onClick={() =>
+              void archive.run(() => api<{ archived: number }>('/households/archive-inactive', { body: {} })).then((r) => {
+                setArchiving(false);
+                if (r) {
+                  setArchived(r.archived);
+                  reload();
+                }
+              })
+            }
+          >
+            Archive them
+          </Button>
+          <Button kind="quiet" onClick={() => setArchiving(false)}>
+            Cancel
+          </Button>
+        </div>
+      </Dialog>
       <form
         className="panel form-row"
         role="search"
@@ -73,7 +118,7 @@ export function HouseholdsPage() {
             </option>
           ))}
         </Select>
-        <div className="field" style={{ alignSelf: 'end' }}>
+        <div className="field">
           <Button type="submit">Search</Button>
         </div>
       </form>
@@ -174,7 +219,7 @@ function MembersEditor({ members, onChange, errors }: { members: Member[]; onCha
             ))}
           </Select>
           {i > 0 ? (
-            <div className="field" style={{ alignSelf: 'end' }}>
+            <div className="field">
               <Button kind="quiet" onClick={() => onChange(members.filter((_, j) => j !== i))} aria-label={`Remove person ${i + 1}`}>
                 Remove
               </Button>
