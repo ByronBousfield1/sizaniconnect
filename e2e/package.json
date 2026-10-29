@@ -1,6 +1,6 @@
 {
   "name": "@sizaniconnect/e2e",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "End-to-end and accessibility tests: a real browser against the built app and a seeded database",
   "scripts": {

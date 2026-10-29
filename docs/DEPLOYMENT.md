@@ -157,4 +157,4 @@ MAIL_FROM=SizaniConnect <no-reply@your-domain>
 
 ## 9. Cost
 
-Roughly R480 per month for B1 plus B1ms in South Africa North, covered for several months by the Azure for Students credit. Storage auto-grow adds about R2.50 per extra GB per month only if it is ever used. **Stop or delete the resource group after the module is marked:** `az group delete -n rg-sizaniconnect`.
+Roughly R560 per month in South Africa North (App Service B1 about R290, PostgreSQL B1ms with 32 GB about R230, data transfer about R40), covered for several months by the Azure for Students credit. Storage auto-grow adds about R2.50 per extra GB per month only if it is ever used. **Stop or delete the resource group after the module is marked:** `az group delete -n rg-sizaniconnect`.
