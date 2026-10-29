@@ -349,6 +349,11 @@ export function HouseholdDetailPage() {
                 {ACTION_LABEL[a]}
               </Button>
             ))}
+            {h.status === 'Active' || h.status === 'PendingVerification' ? (
+              <Link className="btn btn-quiet" to={`/households/${h.id}/card`}>
+                Print household card
+              </Link>
+            ) : null}
             {can('OperationsManager', 'Admin') ? (
               <Button kind="quiet" onClick={() => void download(`/households/${h.id}/export`, `household-${h.referenceCode}.json`)}>
                 Export data (POPIA request)
@@ -361,7 +366,8 @@ export function HouseholdDetailPage() {
       {created ? (
         <Notice tone="good">
           <p>
-            Registered. Write <strong className="ref-code">{created}</strong> on the household&rsquo;s collection slip.
+            Registered. <Link to={`/households/${h.id}/card`}>Print the household card</Link>, or write{' '}
+            <strong className="ref-code">{created}</strong> on the household&rsquo;s collection slip.
           </p>
         </Notice>
       ) : null}

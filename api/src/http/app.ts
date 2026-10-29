@@ -54,6 +54,12 @@ export function createApp({ config, services, tokens, pool, log }: AppContext) {
       referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
     }),
   );
+  // The event desk may use the camera to scan household cards; nothing may use the microphone,
+  // location or payment APIs, and no embedded content may ask for the camera.
+  app.use((_req, res, next) => {
+    res.setHeader('Permissions-Policy', 'camera=(self), microphone=(), geolocation=(), payment=(), usb=()');
+    next();
+  });
   // T-10: a ceiling on requests per IP for every route, including static files and the health check.
   // Generous enough for a whole distribution site sharing one mobile-data address; sign-in has its
   // own much stricter limit in routes/auth.ts.
