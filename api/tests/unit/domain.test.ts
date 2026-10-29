@@ -12,7 +12,14 @@ import {
   type ParcelSizingStrategy,
 } from '../../src/domain/parcel.js';
 import { formatSaCellphone, parseSaCellphone, SA_CELLPHONE_E164 } from '../../src/domain/phone.js';
-import { normaliseReferenceCode, RandomReferenceCodeGenerator, REFERENCE_CODE_PATTERN } from '../../src/domain/referenceCode.js';
+import {
+  cardPayload,
+  checkCharacter,
+  normaliseReferenceCode,
+  parseScan,
+  RandomReferenceCodeGenerator,
+  REFERENCE_CODE_PATTERN,
+} from '../../src/domain/referenceCode.js';
 import { addDays, monthRange, saDate, saDateTime } from '../../src/domain/time.js';
 import { syntheticSaId } from '../../src/db/seed.js';
 
@@ -249,5 +256,72 @@ describe('South African cellphone numbers (Task 2 feedback)', () => {
 
   it('formats a stored number for display', () => {
     expect(formatSaCellphone('+27825550134')).toBe('082 555 0134');
+  });
+});
+
+describe('household card QR payloads: invalid and corrupted scans (Task 1 feedback, US-09)', () => {
+  const code = 'SZN-2026-7K2QX9';
+  const payload = cardPayload(code);
+
+  it('a card holds a short, upper-case payload with a check character', () => {
+    expect(payload).toMatch(/^SZN1:SZN-2026-7K2QX9:[0-9A-HJKMNP-TV-Z]$/);
+    expect(parseScan(payload)).toEqual({ ok: true, code, source: 'card' });
+  });
+
+  it.each([
+    ['SZN-2026-7K2QX9', 'SZN1:SZN-2026-7K2QX9:5'],
+    ['SZN-2026-000000', 'SZN1:SZN-2026-000000:K'],
+    ['SZN-2025-ZZZZZZ', 'SZN1:SZN-2025-ZZZZZZ:V'],
+    ['SZN-2026-ABCDEF', 'SZN1:SZN-2026-ABCDEF:1'],
+  ])('%s prints as %s (the same vectors are tested in web/src/lib/scan.ts copy)', (c, expected) => {
+    expect(cardPayload(c)).toBe(expected);
+  });
+
+  it('reads a card even with the Enter, Tab or lower case a cheap USB scanner adds', () => {
+    expect(parseScan(`${payload.toLowerCase()}\r\n`)).toMatchObject({ ok: true, code });
+    expect(parseScan(`\t${payload}`)).toMatchObject({ ok: true, code });
+  });
+
+  it('catches every single wrong character in the code', () => {
+    const plain = code.replace(/-/g, '');
+    const alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+    let caught = 0;
+    let tried = 0;
+    for (let i = 3; i < plain.length; i++) {
+      for (const c of alphabet) {
+        if (c === plain[i]) continue;
+        const bad = plain.slice(0, i) + c + plain.slice(i + 1);
+        const badCode = `SZN-${bad.slice(3, 7)}-${bad.slice(7)}`;
+        tried++;
+        if (parseScan(`SZN1:${badCode}:${checkCharacter(code)}`).ok === false) caught++;
+      }
+    }
+    expect(caught).toBe(tried);
+  });
+
+  it.each([
+    ['a truncated read', payload.slice(0, 15), 'damaged'],
+    ['a missing check character', `SZN1:${code}`, 'damaged'],
+    ['a wrong check character', `SZN1:${code}:${checkCharacter(code) === 'A' ? 'B' : 'A'}`, 'damaged'],
+    ['two swapped characters', 'SZN1:SZN-2026-K72QX9:' + checkCharacter(code), 'damaged'],
+    ['extra fields', `${payload}:EXTRA`, 'damaged'],
+    ['a card from a future version', `SZN2:${code}:X`, 'foreign'],
+    ['a web address', 'https://example.com/pay?x=1', 'foreign'],
+    ['a product barcode', '6001234567890', 'foreign'],
+    ['far too much text', 'SZN1:' + 'A'.repeat(80), 'too-long'],
+    ['half a typed code', 'SZN-2026', 'incomplete'],
+    ['nothing at all', '  \r\n', 'empty'],
+  ])('refuses %s with a plain message (%s)', (_label, raw, reason) => {
+    const r = parseScan(raw);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason).toBe(reason);
+      expect(r.message.length).toBeGreaterThan(20);
+    }
+  });
+
+  it('still accepts a code typed by hand, forgiving O and I', () => {
+    expect(parseScan('szn 2026 7k2qx9')).toEqual({ ok: true, code, source: 'typed' });
+    expect(parseScan('SZN-2O26-7K2QX9')).toMatchObject({ ok: true, code });
   });
 });

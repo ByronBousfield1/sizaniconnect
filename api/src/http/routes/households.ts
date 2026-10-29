@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { badRequest } from '../../domain/errors.js';
 import { HOUSEHOLD_STATUSES } from '../../domain/household.js';
+import { parseScan } from '../../domain/referenceCode.js';
 import type { Services } from '../../services/index.js';
 import { actorOf, requireRole } from '../middleware/auth.js';
 import { idParam, optionalText, paging, parse, personName, phone, text, uuid } from '../validation.js';
@@ -58,9 +60,12 @@ export function householdRoutes(services: Services) {
   });
 
   router.get('/by-ref/:code', desk, async (req, res) => {
-    const { code } = parse(z.object({ code: z.string().trim().min(6).max(20) }), req.params);
+    // The same parser the desk runs in the browser: a damaged or foreign card is refused here too.
+    const { code } = parse(z.object({ code: z.string().max(200) }), req.params);
+    const scan = parseScan(code);
+    if (!scan.ok) throw badRequest(scan.reason === 'damaged' ? 'CARD_UNREADABLE' : 'NOT_A_REFERENCE_CODE', scan.message);
     const { eventId } = parse(z.object({ eventId: uuid('Event').optional() }), req.query);
-    res.json(await services.households.lookupByReference(code, eventId));
+    res.json(await services.households.lookupByReference(scan.code, eventId));
   });
 
   router.post('/archive-inactive', requireRole('OperationsManager', 'Admin'), async (req, res) => {

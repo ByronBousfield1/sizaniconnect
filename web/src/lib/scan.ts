@@ -1,0 +1,79 @@
+/**
+ * Browser copy of the card and reference-code rules in api/src/domain/referenceCode.ts. The desk
+ * checks every scan here first, so a damaged or foreign QR code is explained at once, with no
+ * network round trip, which matters on a slow phone on mobile data. The API applies the same rules.
+ */
+const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+export const REFERENCE_CODE_PATTERN = /^SZN-\d{4}-[0-9A-HJKMNP-TV-Z]{6}$/;
+
+/** Forgives the usual misreads: O for zero, I or L for one, lower case, stray spaces. */
+export function normaliseReferenceCode(raw: string): string {
+  const upper = raw.replace(/\s+/g, '').toUpperCase();
+  const match = /^SZN-?([0-9OIL]{4})-?([0-9A-Z]{6})$/.exec(upper);
+  if (!match) return upper;
+  const fix = (s: string) => s.replace(/O/g, '0').replace(/[IL]/g, '1');
+  return `SZN-${fix(match[1])}-${fix(match[2])}`;
+}
+export const CARD_PREFIX = 'SZN1';
+export const MAX_SCAN_LENGTH = 64;
+
+const luhnSum = (chars: string, startFactor: 1 | 2) => {
+  let factor = startFactor;
+  let sum = 0;
+  for (let i = chars.length - 1; i >= 0; i--) {
+    const point = ALPHABET.indexOf(chars[i]);
+    if (point < 0) return -1;
+    const addend = factor * point;
+    factor = factor === 2 ? 1 : 2;
+    sum += Math.floor(addend / 32) + (addend % 32);
+  }
+  return sum;
+};
+
+export function checkCharacter(code: string): string {
+  const sum = luhnSum(code.replace(/-/g, ''), 2);
+  return ALPHABET[(32 - (sum % 32)) % 32];
+}
+
+export function cardPayload(code: string): string {
+  return `${CARD_PREFIX}:${code}:${checkCharacter(code)}`;
+}
+
+export type ScanResult =
+  | { ok: true; code: string; source: 'card' | 'typed' }
+  | { ok: false; reason: 'empty' | 'too-long' | 'damaged' | 'foreign' | 'incomplete'; message: string };
+
+export const SCAN_MESSAGES = {
+  empty: 'Type or scan a reference code first.',
+  'too-long': 'That is not a SizaniConnect card: what was scanned is far too long. Type the reference code printed on the card.',
+  damaged:
+    'The card could not be read correctly. It may be creased, dirty or partly covered. Scan it again, or type the reference code printed under the QR code.',
+  foreign: 'That QR code is not a SizaniConnect household card. Ask for the household card, or type the reference code.',
+  incomplete: 'That is not a complete reference code. Codes look like SZN-2026-7K2QX9.',
+} as const;
+
+const fail = (reason: keyof typeof SCAN_MESSAGES): ScanResult => ({ ok: false, reason, message: SCAN_MESSAGES[reason] });
+
+/** Everything that reaches the desk input, whether typed, scanned by camera or typed by a USB scanner. */
+export function parseScan(raw: string): ScanResult {
+  // eslint-disable-next-line no-control-regex
+  const s = raw.replace(/[\u0000-\u001F\u007F]/g, '').trim(); // scanners often add Enter or Tab
+  if (!s) return fail('empty');
+  if (s.length > MAX_SCAN_LENGTH) return fail('too-long');
+
+  if (/^SZN\d+:/i.test(s)) {
+    const parts = s.toUpperCase().split(':');
+    if (parts[0] !== CARD_PREFIX) return fail('foreign');
+    if (parts.length !== 3 || parts[2].length !== 1) return fail('damaged');
+    const code = normaliseReferenceCode(parts[1]);
+    if (!REFERENCE_CODE_PATTERN.test(code)) return fail('damaged');
+    if (luhnSum(code.replace(/-/g, '') + parts[2], 1) % 32 !== 0) return fail('damaged');
+    return { ok: true, code, source: 'card' };
+  }
+
+  const code = normaliseReferenceCode(s);
+  if (REFERENCE_CODE_PATTERN.test(code)) return { ok: true, code, source: 'typed' };
+  // A URL, a payment code, a product barcode: something was scanned, but not one of ours.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(s) || /^\d{8,}$/.test(s)) return fail('foreign');
+  return fail('incomplete');
+}

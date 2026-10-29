@@ -1,4 +1,4 @@
-import { StrictMode, type ReactNode } from 'react';
+import { lazy, StrictMode, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -47,6 +47,10 @@ function NotFound() {
   );
 }
 
+// The card page carries the QR generator; loading it on demand keeps it out of the bundle every
+// volunteer's phone downloads for the event desk.
+const HouseholdCardPage = lazy(() => import('./pages/HouseholdCard').then((m) => ({ default: m.HouseholdCardPage })));
+
 const STAFF: Role[] = ['Admin', 'OperationsManager', 'SiteCoordinator'];
 const DESK: Role[] = ['SiteCoordinator', 'OperationsManager', 'Volunteer'];
 
@@ -70,6 +74,7 @@ export function AppRoutes() {
         <Route path="/households" element={<Guard roles={STAFF}><HouseholdsPage /></Guard>} />
         <Route path="/households/new" element={<Guard roles={['SiteCoordinator', 'OperationsManager']}><HouseholdNewPage /></Guard>} />
         <Route path="/households/:id" element={<Guard roles={STAFF}><HouseholdDetailPage /></Guard>} />
+        <Route path="/households/:id/card" element={<Guard roles={STAFF}><Suspense fallback={<Loading />}><HouseholdCardPage /></Suspense></Guard>} />
         <Route path="/events" element={<Guard roles={STAFF}><EventsPage /></Guard>} />
         <Route path="/events/:id" element={<Guard roles={[...STAFF, 'Volunteer']}><EventDetailPage /></Guard>} />
         <Route path="/shifts" element={<Guard roles={['Volunteer', 'SiteCoordinator']}><ShiftsPage /></Guard>} />

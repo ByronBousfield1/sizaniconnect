@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { REFERENCE_CODE_PATTERN } from '../../src/domain/referenceCode.js';
+import { cardPayload, REFERENCE_CODE_PATTERN } from '../../src/domain/referenceCode.js';
 import { createHarness, newSaId, type Harness } from './harness.js';
 
 let h: Harness;
@@ -216,5 +216,22 @@ describe('cellphone validation (Task 2 feedback)', () => {
     await h.as('admin@t.test').patch(`/api/v1/users/${ok.body.id}`, { fullName: 'Cell Tested' });
     const row = await h.pool.query('SELECT phone_number AS p FROM users WHERE user_id = $1', [ok.body.id]);
     expect(row.rows[0].p).toBe('+27720001111');
+  });
+});
+
+describe('scanning household cards at the desk (US-09)', () => {
+  it('finds a household from its card payload and refuses damaged or foreign scans without searching', async () => {
+    const hh = await h.activeHousehold();
+    const vol = h.as('volone@t.test');
+    const ok = await vol.get(`/api/v1/households/by-ref/${encodeURIComponent(cardPayload(hh.referenceCode))}`);
+    expect(ok.status).toBe(200);
+    expect(ok.body.id).toBe(hh.id);
+
+    const damaged = await vol.get(`/api/v1/households/by-ref/${encodeURIComponent(cardPayload(hh.referenceCode).slice(0, -1) + 'Z')}`);
+    const foreign = await vol.get(`/api/v1/households/by-ref/${encodeURIComponent('https://example.com')}`);
+    // One of the two checks could in theory pass by chance if Z happens to be the right character.
+    if (!cardPayload(hh.referenceCode).endsWith('Z')) expect(damaged.body.error.code).toBe('CARD_UNREADABLE');
+    expect(foreign.body.error.code).toBe('NOT_A_REFERENCE_CODE');
+    expect((await vol.get('/api/v1/households/by-ref/SZN-2026-000000')).status).toBe(404);
   });
 });
