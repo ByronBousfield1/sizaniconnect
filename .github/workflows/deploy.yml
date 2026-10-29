@@ -1,6 +1,8 @@
 # Continuous deployment.
 #   develop -> staging web app      (automatic)
 #   main    -> production web app   (requires approval on the "production" environment)
+#   Rollback: Actions > Deploy > Run workflow, choose an earlier release tag (for example v1.0.1)
+#   under "Use workflow from". That rebuilds the tag and deploys it to production, with approval.
 # Deployment jobs are skipped until the Azure variables exist, so the repository can be pushed
 # before the cloud resources are created. See docs/DEPLOYMENT.md.
 name: Deploy
@@ -79,7 +81,9 @@ jobs:
 
   production:
     name: Deploy to production
-    if: github.ref == 'refs/heads/main' && vars.AZURE_WEBAPP_NAME_PRODUCTION != ''
+    if: >-
+      vars.AZURE_WEBAPP_NAME_PRODUCTION != '' &&
+      (github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/v')))
     needs: build
     runs-on: ubuntu-latest
     environment:
@@ -103,5 +107,5 @@ jobs:
             if echo "$body" | grep -q "\"version\":\"${GITHUB_SHA}\"" && echo "$body" | grep -q '"database":"ok"'; then exit 0; fi
             sleep 10
           done
-          echo "::error::Production is not healthy on ${GITHUB_SHA}. Roll back by re-running this workflow on the previous release tag."
+          echo "::error::Production is not healthy on ${GITHUB_SHA}. Roll back: Actions > Deploy > Run workflow on the previous release tag (docs/DEPLOYMENT.md, section 7)."
           exit 1
