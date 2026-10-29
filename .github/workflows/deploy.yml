@@ -26,8 +26,8 @@ jobs:
     needs: ci
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Build the React front end
@@ -43,7 +43,7 @@ jobs:
           cp -r web/dist release/public
           echo "${GITHUB_SHA}" > release/version.txt
           cd release && zip -qr ../release.zip .
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-${{ github.sha }}
           path: release.zip
@@ -58,7 +58,7 @@ jobs:
       name: staging
       url: https://${{ vars.AZURE_WEBAPP_NAME_STAGING }}.azurewebsites.net
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-${{ github.sha }}
       - uses: azure/webapps-deploy@v3
@@ -86,7 +86,7 @@ jobs:
       name: production
       url: https://${{ vars.AZURE_WEBAPP_NAME_PRODUCTION }}.azurewebsites.net
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-${{ github.sha }}
       - uses: azure/webapps-deploy@v3
