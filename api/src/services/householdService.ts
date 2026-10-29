@@ -135,6 +135,7 @@ export class HouseholdService {
     return this.deps.uow.run(async (r) => {
       const h = await r.households.findById(id, true);
       if (!h) throw notFound('Household');
+      this.assertOwnSite(actor, h.homeSiteId);
       if (!canEditDetails(h.status)) {
         throw conflict('NOT_EDITABLE', 'Suspended and archived households cannot be edited. Reinstate the household first.');
       }
@@ -153,6 +154,7 @@ export class HouseholdService {
     return this.deps.uow.run(async (r) => {
       const h = await r.households.findById(id, true);
       if (!h) throw notFound('Household');
+      this.assertOwnSite(actor, h.homeSiteId);
       // Four-eyes check: the person who registered a household may not also verify it.
       if (action === 'verify' && h.registeredBy === actor.id) {
         throw forbidden('A household must be verified by someone other than the person who registered it.');
@@ -181,6 +183,13 @@ export class HouseholdService {
       note: 'Identity numbers are not stored by SizaniConnect; only a one-way keyed hash is kept for duplicate checks.',
       household: data,
     };
+  }
+
+  /** T-04: a site coordinator may read any household but change only those at their own site. */
+  private assertOwnSite(actor: Actor, homeSiteId: string) {
+    if (actor.role === 'SiteCoordinator' && actor.siteId !== homeSiteId) {
+      throw forbidden('Site coordinators can change households at their own site only. Ask that site\'s coordinator or an operations manager.');
+    }
   }
 
   private assertMembers(members: MemberInput[]) {

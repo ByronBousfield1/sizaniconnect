@@ -353,9 +353,11 @@ export function HouseholdDetailPage() {
 
   const isOps = user?.role === 'OperationsManager';
   const available: StatusAction[] = [];
+  // Coordinators change households at their own site only (the API enforces the same rule).
+  const mayChange = isOps || (user?.role === 'SiteCoordinator' && user.siteId === h.homeSiteId);
   if (h.status === 'PendingVerification' && isOps) available.push('verify', 'return');
-  if (h.status === 'Draft' && can('SiteCoordinator', 'OperationsManager')) available.push('resubmit');
-  if (h.status === 'Active' && can('SiteCoordinator', 'OperationsManager')) available.push('suspend');
+  if (h.status === 'Draft' && mayChange) available.push('resubmit');
+  if (h.status === 'Active' && mayChange) available.push('suspend');
   if (h.status === 'Suspended' && isOps) available.push('reinstate');
   if ((h.status === 'Active' || h.status === 'Suspended') && can('OperationsManager', 'Admin')) available.push('archive');
 
@@ -440,7 +442,7 @@ export function HouseholdDetailPage() {
         <section className="panel">
           <div className="panel-head">
             <h2>Details</h2>
-            {can('SiteCoordinator', 'OperationsManager') && ['Draft', 'PendingVerification', 'Active'].includes(h.status) && !editing ? (
+            {mayChange && ['Draft', 'PendingVerification', 'Active'].includes(h.status) && !editing ? (
               <Button kind="quiet" className="btn-small" onClick={() => {
                   setEdit({ contactNumber: h.contactNumber ? fmtPhone(h.contactNumber) : '', addressLine: h.addressLine, suburb: h.suburb });
                   setEditing(true);
