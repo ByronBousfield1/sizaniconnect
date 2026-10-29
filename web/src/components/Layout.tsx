@@ -23,6 +23,7 @@ const NAV: NavItem[] = [
   { to: '/admin/users', label: 'Users', roles: ['Admin'] },
   { to: '/admin/sites', label: 'Sites', roles: ['Admin'] },
   { to: '/admin/audit', label: 'Audit log', roles: ['Admin'] },
+  { to: '/admin/retention', label: 'Data retention', roles: ['Admin'] },
 ];
 
 export function Layout() {

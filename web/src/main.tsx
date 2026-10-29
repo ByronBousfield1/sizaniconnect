@@ -14,6 +14,7 @@ import { DonorPortalPage, ReceiptPage } from './pages/Donor';
 import { EventDetailPage, EventsPage } from './pages/Events';
 import { HouseholdDetailPage, HouseholdNewPage, HouseholdsPage } from './pages/Households';
 import { OverviewPage } from './pages/Overview';
+import { RetentionPage } from './pages/Retention';
 import { ReportsPage } from './pages/Reports';
 import { ShiftsPage } from './pages/Shifts';
 import { StockPage } from './pages/Stock';
@@ -80,6 +81,7 @@ export function AppRoutes() {
         <Route path="/admin/users" element={<Guard roles={['Admin']}><UsersPage /></Guard>} />
         <Route path="/admin/sites" element={<Guard roles={['Admin']}><SitesPage /></Guard>} />
         <Route path="/admin/audit" element={<Guard roles={['Admin']}><AuditPage /></Guard>} />
+        <Route path="/admin/retention" element={<Guard roles={['Admin']}><RetentionPage /></Guard>} />
         <Route path="/account" element={<AccountPage />} />
         <Route path="*" element={<NotFound />} />
       </Route>

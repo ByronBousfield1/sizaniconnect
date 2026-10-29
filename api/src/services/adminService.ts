@@ -67,6 +67,7 @@ export class AdminService {
     return this.deps.uow.run(async (r) => {
       const user = await r.users.findById(id);
       if (!user) throw notFound('User');
+      if (user.erasedAt) throw conflict('ALREADY_ERASED', 'This account has been erased and cannot be changed.');
       if (id === actor.id && (patch.isActive === false || (patch.role && patch.role !== 'Admin'))) {
         throw conflict('SELF_LOCKOUT', 'You cannot deactivate your own account or remove your own admin role.');
       }
@@ -79,7 +80,10 @@ export class AdminService {
         }
       }
       await r.users.update(id, patch);
-      if (patch.isActive === false) await r.tokens.revokeAllForUser(id);
+      if (patch.isActive === false) {
+        await r.tokens.revokeAllForUser(id);
+        await r.tokens.retireResetTokens(id);
+      }
       await audit(r, actor, 'User', id, 'UPDATE', { fields: Object.keys(patch), role: patch.role });
       return { id };
     });
@@ -91,7 +95,7 @@ export class AdminService {
    */
   async issueResetLink(actor: Actor, id: string): Promise<{ link?: string; expiresInHours: number }> {
     const user = await this.deps.uow.read((r) => r.users.findById(id));
-    if (!user) throw notFound('User');
+    if (!user || user.erasedAt) throw notFound('User');
     if (!user.isActive) throw conflict('USER_INACTIVE', 'This account is deactivated. Reactivate it before sending a reset link.');
     const token = await this.deps.uow.run(async (r) => {
       const t = newOpaqueToken();

@@ -323,6 +323,50 @@ export async function seedDemoData(pool: pg.Pool, deps: ServiceDeps, log: Logger
       );
     }
 
+    // ---------------------------------------------------------------- data retention examples
+    // A volunteer who retired five weeks ago (due for erasure) and households archived long enough
+    // ago to be due for anonymisation (NFR-16). A separate random stream keeps the data above unchanged.
+    const r2 = mulberry32(2026);
+    const retired = await one(
+      `INSERT INTO users (full_name, email, role_id, password_hash, phone_number, is_active, deactivated_at, deactivation_reason)
+       VALUES ('Bongani Zulu', 'volunteer.retired@sizani.test', $1, $2, $3, false, now() - interval '35 days', 'Retired')
+       RETURNING user_id AS id`,
+      [ROLE_IDS.Volunteer, passwordHash, cellphone(r2)],
+    );
+    const pastShift = await one(`SELECT shift_id AS id FROM volunteer_shifts WHERE starts_at < now() - interval '40 days' ORDER BY starts_at LIMIT 1`);
+    if (pastShift) {
+      await q(`INSERT INTO shift_assignments (shift_id, user_id, status, checked_in_at, hours_served) VALUES ($1,$2,'CheckedIn',now() - interval '60 days',4.5)`, [
+        pastShift.id,
+        retired.id,
+      ]);
+    }
+    const archivedDefs: [string, number][] = [['Thabo Mokoena', 26], ['Zanele Dube', 27], ['Musa Khoza', 31], ['Precious Sithole', 5]];
+    for (const [head, monthsAgo] of archivedDefs) {
+      const h = await one(
+        `INSERT INTO households (reference_code, head_of_household, id_number_hash, contact_number, address_line, suburb, home_site_id,
+                                 status, status_reason, registered_by, verified_by, registered_on, verified_on, archived_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'Archived','No collection in 12 months',$8,$9,
+                 now() - make_interval(months => $10 + 14), now() - make_interval(months => $10 + 14),
+                 now() - make_interval(months => $10), now() - make_interval(months => $10))
+         RETURNING household_id AS id`,
+        [
+          `SZN-${Number(today.slice(0, 4)) - 3}-${randomSuffix(r2)}`,
+          head,
+          hashIdentityNumber(syntheticSaId(r2), deps.config.idHashPepper),
+          cellphone(r2),
+          `${100 + monthsAgo} Mooki Street`,
+          orlando.suburb,
+          orlando.id,
+          coord,
+          ops,
+          monthsAgo,
+        ],
+      );
+      await q('INSERT INTO household_members (household_id, first_name, age_band, dependant_type) VALUES ($1,$2,$3,$4),($1,$5,$6,$7)', [
+        h.id, head.split(' ')[0], '18-59', 'Self', 'Lwazi', '6-12', 'Child',
+      ]);
+    }
+
     await q(
       `INSERT INTO audit_log (user_id, entity_name, action, details) VALUES ($1, 'System', 'SEED', '{"note":"Synthetic demo data"}')`,
       [users['admin@sizani.test']],

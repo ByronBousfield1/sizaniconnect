@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { ROLES } from '../../domain/roles.js';
+import { DEACTIVATION_REASONS } from '../../repositories/userRepository.js';
 import type { Services } from '../../services/index.js';
 import { actorOf, requireRole } from '../middleware/auth.js';
 import { email, idParam, isoDate, paging, parse, personName, phone, text, uuid } from '../validation.js';
@@ -49,6 +50,30 @@ export function adminRoutes(services: Services) {
   router.post('/users/:id/reset-link', admin, async (req, res) => {
     const { id } = parse(idParam, req.params);
     res.status(201).json(await services.admin.issueResetLink(actorOf(req), id));
+  });
+
+  // Someone has left: the account stops working now; personal data is erased later (or now).
+  router.post('/users/:id/offboard', admin, async (req, res) => {
+    const { id } = parse(idParam, req.params);
+    const body = parse(
+      z.object({ reason: z.enum(DEACTIVATION_REASONS, { errorMap: () => ({ message: 'Choose why the person is leaving.' }) }) }),
+      req.body,
+    );
+    res.json(await services.retention.offboardUser(actorOf(req), id, body.reason));
+  });
+
+  router.post('/users/:id/erase', admin, async (req, res) => {
+    const { id } = parse(idParam, req.params);
+    const body = parse(z.object({ confirmEmail: z.string().max(254).default('') }), req.body);
+    res.json(await services.retention.eraseUser(actorOf(req), id, body.confirmEmail));
+  });
+
+  router.get('/retention', admin, async (_req, res) => {
+    res.json(await services.retention.overview());
+  });
+
+  router.post('/retention/households/anonymise', admin, async (req, res) => {
+    res.json(await services.retention.anonymiseDueHouseholds(actorOf(req)));
   });
 
   router.get('/sites', requireRole('Admin', 'OperationsManager', 'SiteCoordinator', 'Volunteer'), async (_req, res) => {

@@ -79,6 +79,17 @@ const SELECT_SHIFT = `
 export class ShiftRepository {
   constructor(private readonly db: Db) {}
 
+  /** When someone leaves, their places on shifts that have not started yet are freed for others. */
+  async withdrawFutureForUser(userId: string, after: Date): Promise<number> {
+    const r = await this.db.query(
+      `UPDATE shift_assignments sa SET status = 'Withdrawn', withdrawn_at = now()
+       FROM volunteer_shifts vs
+       WHERE vs.shift_id = sa.shift_id AND sa.user_id = $1 AND sa.status = 'Assigned' AND vs.starts_at > $2`,
+      [userId, after],
+    );
+    return r.rowCount ?? 0;
+  }
+
   async insert(s: { eventId: string; startsAt: Date; endsAt: Date; volunteersNeeded: number; notes: string | null }) {
     const r = await this.db.query(
       `INSERT INTO volunteer_shifts (event_id, starts_at, ends_at, volunteers_needed, notes)
