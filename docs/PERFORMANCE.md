@@ -4,7 +4,7 @@ How SizaniConnect measures against the performance requirements in the Task 1 do
 
 ## Result
 
-Measured on 30 October 2026 with `api/scripts/load-test.ts`, on the v1.1.0 code.
+Measured on 29 October 2026 with `api/scripts/load-test.ts`, on the v1.1.0 code.
 
 | Requirement | Operation | Requests | Concurrent | Errors | p50 | p95 | Target (p95) | Result |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
