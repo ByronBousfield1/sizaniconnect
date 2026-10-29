@@ -11,6 +11,7 @@ import {
   SmallParcelStrategy,
   type ParcelSizingStrategy,
 } from '../../src/domain/parcel.js';
+import { formatSaCellphone, parseSaCellphone, SA_CELLPHONE_E164 } from '../../src/domain/phone.js';
 import { normaliseReferenceCode, RandomReferenceCodeGenerator, REFERENCE_CODE_PATTERN } from '../../src/domain/referenceCode.js';
 import { addDays, monthRange, saDate, saDateTime } from '../../src/domain/time.js';
 import { syntheticSaId } from '../../src/db/seed.js';
@@ -202,5 +203,51 @@ describe('time helpers', () => {
   it('computes month ranges and day offsets', () => {
     expect(monthRange('2026-12')).toEqual({ start: '2026-12-01', end: '2027-01-01' });
     expect(addDays('2026-02-27', 2)).toBe('2026-03-01');
+  });
+});
+
+describe('South African cellphone numbers (Task 2 feedback)', () => {
+  it.each([
+    ['082 555 0134', '+27825550134'],
+    ['0825550134', '+27825550134'],
+    ['082-555-0134', '+27825550134'],
+    ['(082) 555 0134', '+27825550134'],
+    ['+27 82 555 0134', '+27825550134'],
+    ['27825550134', '+27825550134'],
+    ['  060 123 4567 ', '+27601234567'],
+    ['071 234 5678', '+27712345678'],
+    ['085 111 2222', '+27851112222'],
+  ])('accepts %s as %s', (raw, e164) => {
+    expect(parseSaCellphone(raw)).toEqual({ ok: true, e164 });
+  });
+
+  it.each([
+    ['011 555 0134', /landline/],
+    ['021 555 0134', /landline/],
+    ['0800 123 456', /not cellphone numbers/],
+    ['086 123 4567', /not cellphone numbers/],
+    ['087 123 4567', /not cellphone numbers/],
+    ['082 555 013', /10 digits/],
+    ['082 555 01345', /10 digits/],
+    ['+44 20 7946 0958', /South African/],
+    ['082 555 O134', /digits only/],
+    ['<script>', /digits only/],
+    ['08+2 555 0134', /\+ sign/],
+    ['089 123 4567', /not a South African cellphone/],
+  ])('refuses %s with a message that says why', (raw, message) => {
+    const r = parseSaCellphone(raw);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.message).toMatch(message);
+  });
+
+  it('every accepted number matches the format the database enforces', () => {
+    for (const raw of ['082 555 0134', '+27 61 000 0000', '079 999 9999']) {
+      const r = parseSaCellphone(raw);
+      expect(r.ok && SA_CELLPHONE_E164.test(r.e164)).toBe(true);
+    }
+  });
+
+  it('formats a stored number for display', () => {
+    expect(formatSaCellphone('+27825550134')).toBe('082 555 0134');
   });
 });
