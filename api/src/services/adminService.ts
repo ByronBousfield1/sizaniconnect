@@ -85,6 +85,34 @@ export class AdminService {
     });
   }
 
+  /**
+   * An administrator helps someone who is locked out, including another administrator. The link
+   * lasts 24 hours so it can be passed on by phone or in person when email is not configured.
+   */
+  async issueResetLink(actor: Actor, id: string): Promise<{ link?: string; expiresInHours: number }> {
+    const user = await this.deps.uow.read((r) => r.users.findById(id));
+    if (!user) throw notFound('User');
+    if (!user.isActive) throw conflict('USER_INACTIVE', 'This account is deactivated. Reactivate it before sending a reset link.');
+    const token = await this.deps.uow.run(async (r) => {
+      const t = newOpaqueToken();
+      await r.tokens.insertResetToken({
+        userId: id,
+        hash: t.hash,
+        purpose: 'reset',
+        expiresAt: new Date(this.deps.clock().getTime() + 24 * 3_600_000),
+      });
+      await audit(r, actor, 'User', id, 'PASSWORD_RESET_ISSUED');
+      return t.token;
+    });
+    const link = `${this.deps.config.appBaseUrl}/reset-password?token=${token}`;
+    await this.deps.email.send({
+      to: user.email,
+      subject: 'Reset your SizaniConnect password',
+      text: `Hello ${user.fullName},\n\nAn administrator has sent you a link to choose a new password. It works once and expires in 24 hours:\n\n${link}\n`,
+    });
+    return { link: this.deps.email.configured ? undefined : link, expiresInHours: 24 };
+  }
+
   listSites() {
     return this.deps.uow.read((r) => r.events.listSites());
   }

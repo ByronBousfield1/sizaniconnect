@@ -17,6 +17,7 @@ export function UsersPage() {
   const donors = useLoad(() => api<{ id: string; donorName: string }[]>('/donors'));
   const [form, setForm] = useState({ fullName: '', email: '', phoneNumber: '', role: 'Volunteer' as Role, siteId: '', donorId: '' });
   const [created, setCreated] = useState<{ name: string; link?: string } | null>(null);
+  const [resetFor, setResetFor] = useState<{ name: string; link?: string } | null>(null);
   const create = useAction();
   const update = useAction();
   const fe = create.error?.fieldErrors ?? {};
@@ -33,6 +34,11 @@ export function UsersPage() {
       setForm({ fullName: '', email: '', phoneNumber: '', role: 'Volunteer', siteId: '', donorId: '' });
       users.reload();
     }
+  };
+
+  const sendReset = async (u: User) => {
+    const res = await update.run(() => api<{ link?: string }>(`/users/${u.id}/reset-link`, { body: {} }));
+    if (res) setResetFor({ name: u.fullName, link: res.link });
   };
 
   const toggle = async (u: User) => {
@@ -53,6 +59,21 @@ export function UsersPage() {
               <code style={{ wordBreak: 'break-all' }}>{created.link}</code>
             </p>
           ) : null}
+        </Notice>
+      ) : null}
+
+      {resetFor ? (
+        <Notice tone="good">
+          <p>A password reset link was created for {resetFor.name}. It works once and expires in 24 hours.</p>
+          {resetFor.link ? (
+            <p className="small">
+              Email is not configured, so give this link to the person directly (in person or by phone, never in a group chat):
+              <br />
+              <code style={{ wordBreak: 'break-all' }}>{resetFor.link}</code>
+            </p>
+          ) : (
+            <p className="small">It has been emailed to them.</p>
+          )}
         </Notice>
       ) : null}
 
@@ -125,9 +146,16 @@ export function UsersPage() {
                 <td>{u.isActive ? <Pill tone="good">Active</Pill> : <Pill tone="neutral">Deactivated</Pill>}</td>
                 <td>
                   {u.id !== me?.id ? (
-                    <Button kind={u.isActive ? 'danger' : 'quiet'} className="btn-small" busy={update.busy} onClick={() => void toggle(u)}>
-                      {u.isActive ? 'Deactivate' : 'Reactivate'}
-                    </Button>
+                    <span className="row-actions">
+                      {u.isActive ? (
+                        <Button kind="quiet" className="btn-small" busy={update.busy} onClick={() => void sendReset(u)}>
+                          Send reset link
+                        </Button>
+                      ) : null}
+                      <Button kind={u.isActive ? 'danger' : 'quiet'} className="btn-small" busy={update.busy} onClick={() => void toggle(u)}>
+                        {u.isActive ? 'Deactivate' : 'Reactivate'}
+                      </Button>
+                    </span>
                   ) : (
                     <span className="small muted">You</span>
                   )}

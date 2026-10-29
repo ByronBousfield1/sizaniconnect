@@ -83,6 +83,41 @@ export function authRoutes(services: Services, config: Config, authenticate: Req
     res.json({ message: 'Password saved. You can sign in now.' });
   });
 
+  // Self-service recovery without email: email address + one recovery code + a new password.
+  router.post('/recover', limiter, async (req, res) => {
+    const body = parse(
+      z.object({
+        email,
+        recoveryCode: z.string().trim().min(1, 'Enter one of your recovery codes.').max(20, 'That is not a recovery code.'),
+        newPassword: z.string().max(128, 'Use no more than 128 characters.'),
+      }),
+      req.body,
+    );
+    const result = await services.auth.recoverWithCode(body.email, body.recoveryCode, body.newPassword, req.ip);
+    res.json({ message: 'Password saved. You can sign in now.', remainingCodes: result.remainingCodes });
+  });
+
+  router.post('/change-password', limiter, sameOrigin, authenticate, async (req, res) => {
+    const body = parse(
+      z.object({
+        currentPassword: z.string().min(1, 'Enter your current password.').max(128),
+        newPassword: z.string().max(128, 'Use no more than 128 characters.'),
+      }),
+      req.body,
+    );
+    await services.auth.changePassword(actorOf(req), body.currentPassword, body.newPassword, req.cookies?.[COOKIE]);
+    res.json({ message: 'Password changed. Your other devices have been signed out.' });
+  });
+
+  router.get('/recovery-codes', authenticate, async (req, res) => {
+    res.json(await services.auth.recoveryCodeStatus(actorOf(req)));
+  });
+
+  router.post('/recovery-codes', limiter, authenticate, async (req, res) => {
+    const body = parse(z.object({ password: z.string().min(1, 'Enter your password.').max(128) }), req.body);
+    res.status(201).json(await services.auth.createRecoveryCodes(actorOf(req), body.password));
+  });
+
   router.get('/me', authenticate, async (req, res) => {
     res.json(await services.auth.me(actorOf(req)));
   });

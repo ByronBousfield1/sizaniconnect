@@ -203,6 +203,45 @@ a:hover {
   margin-bottom: var(--s-2) !important;
 }
 
+.whoami-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-4);
+  align-items: center;
+}
+.sidebar .whoami-links a {
+  display: inline-block;
+  padding: var(--s-1) 0;
+  border: 0;
+  text-decoration: underline;
+}
+.sidebar .whoami-links a.active {
+  background: none;
+}
+
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--s-2) var(--s-4);
+  padding-left: 1.5rem;
+  margin: var(--s-4) 0;
+}
+.recovery-codes code {
+  font-size: 1.125rem;
+  letter-spacing: 0.06em;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  justify-content: flex-end;
+}
+
+.inline-form {
+  max-width: 28rem;
+}
+
 .link-button {
   background: none;
   border: 0;

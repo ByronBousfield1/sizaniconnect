@@ -6,6 +6,8 @@
  *   migrate                 apply pending migrations (the app also does this when it starts)
  *   rollback --to <file>    undo every migration applied after <file>, newest first
  *   seed [--force]          load the demo data set
+ *   recover-admin <email>   print a 30-minute password link for an administrator who is locked out
+ *                           and has no email or recovery code (break-glass; the use is audited)
  */
 import { loadConfig } from '../config.js';
 import { buildContainer } from '../container.js';
@@ -55,8 +57,20 @@ try {
       await seedDemoData(pool, deps, logger, { force: args.includes('--force') });
       break;
     }
+    case 'recover-admin': {
+      const email = args[0];
+      if (!email) throw new Error('Say which administrator, for example: recover-admin admin@sizani.org.za');
+      const { services } = buildContainer(config, pool, logger);
+      const { link, expiresAt } = await services.auth.issueBreakGlassLink(email);
+      out('Single-use link for that administrator. Give it to them in person or by phone, never by email:');
+      out();
+      out(`  ${link}`);
+      out();
+      out(`It expires at ${expiresAt.toISOString()}. This use has been recorded in the audit log.`);
+      break;
+    }
     default:
-      throw new Error(`Unknown command "${command}". Use status, migrate, rollback --to <file> or seed.`);
+      throw new Error(`Unknown command "${command}". Use status, migrate, rollback --to <file>, seed or recover-admin <email>.`);
   }
 } catch (err) {
   process.stderr.write(`${(err as Error).message}\n`);

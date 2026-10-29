@@ -10,11 +10,12 @@ import {
   ShiftRepository,
   StockRepository,
 } from './operationsRepositories.js';
-import { TokenRepository, UserRepository } from './userRepository.js';
+import { RecoveryCodeRepository, TokenRepository, UserRepository } from './userRepository.js';
 
 export interface Repositories {
   users: UserRepository;
   tokens: TokenRepository;
+  recoveryCodes: RecoveryCodeRepository;
   households: HouseholdRepository;
   events: EventRepository;
   collections: CollectionRepository;
@@ -29,6 +30,7 @@ export function createRepositories(db: Db): Repositories {
   return {
     users: new UserRepository(db),
     tokens: new TokenRepository(db),
+    recoveryCodes: new RecoveryCodeRepository(db),
     households: new HouseholdRepository(db),
     events: new EventRepository(db),
     collections: new CollectionRepository(db),

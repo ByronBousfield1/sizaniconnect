@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { ROLE_LABELS } from '../lib/format';
 import type { Role } from '../lib/types';
@@ -74,9 +74,12 @@ export function Layout() {
             {ROLE_LABELS[user.role]}
             {user.siteName ? `, ${user.siteName}` : ''}
           </p>
-          <button type="button" className="link-button" onClick={() => void logout()}>
-            Sign out
-          </button>
+          <p className="whoami-links">
+            <Link to="/account">My account</Link>
+            <button type="button" className="link-button" onClick={() => void logout()}>
+              Sign out
+            </button>
+          </p>
         </div>
       </nav>
 
