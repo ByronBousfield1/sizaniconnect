@@ -370,6 +370,13 @@ export function HouseholdDetailPage() {
           <p>Verify once you have seen proof of address. The person who registered a household cannot verify it.</p>
         </Notice>
       ) : null}
+      {h.anonymisedAt ? (
+        <Notice tone="info">
+          <p>
+            Personal details were removed on {fmtDate(h.anonymisedAt)}, after this household had been archived for 24 months (retention policy, NFR-16). Collection history is kept for reports.
+          </p>
+        </Notice>
+      ) : null}
       {h.statusReason ? (
         <Notice tone={h.status === 'Suspended' ? 'bad' : 'warn'}>
           <p>

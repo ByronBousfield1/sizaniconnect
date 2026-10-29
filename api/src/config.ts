@@ -17,6 +17,8 @@ export interface Config {
   lockoutThreshold: number;
   lockoutMinutes: number;
   checkinWindowMinutes: number;
+  userErasureGraceDays: number;
+  householdRetentionMonths: number;
   appBaseUrl: string;
   smtpUrl?: string;
   mailFrom: string;
@@ -60,6 +62,10 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     lockoutThreshold: 5,
     lockoutMinutes: 15,
     checkinWindowMinutes: 60,
+    // An offboarded account waits this long before erasure, so a mistaken offboarding can be undone.
+    userErasureGraceDays: Number(process.env.USER_ERASURE_GRACE_DAYS ?? 30),
+    // NFR-16: archived households are anonymised this many months after archiving.
+    householdRetentionMonths: Number(process.env.HOUSEHOLD_RETENTION_MONTHS ?? 24),
     appBaseUrl: (process.env.APP_BASE_URL ?? 'http://localhost:5173').replace(/\/$/, ''),
     smtpUrl: process.env.SMTP_URL || undefined,
     mailFrom: process.env.MAIL_FROM ?? 'SizaniConnect <no-reply@sizani.test>',

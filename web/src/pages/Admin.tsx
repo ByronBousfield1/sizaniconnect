@@ -1,11 +1,13 @@
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { CellphoneInput } from '../components/CellphoneInput';
 import { Button, ErrorNotice, Loading, Notice, PageHeader, Pill, Select, Table, TextInput } from '../components/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { fmtDateTime, ROLE_LABELS } from '../lib/format';
+import { fmtDate, fmtDateTime, ROLE_LABELS } from '../lib/format';
 import { useAction, useLoad } from '../lib/hooks';
 import type { Paged, Role, Site, User } from '../lib/types';
+import { DEACTIVATION_REASONS, OffboardDialog, type OffboardResult } from './Retention';
 
 const ROLES: Role[] = ['Admin', 'OperationsManager', 'SiteCoordinator', 'Volunteer', 'Donor'];
 
@@ -18,6 +20,8 @@ export function UsersPage() {
   const [form, setForm] = useState({ fullName: '', email: '', phoneNumber: '', role: 'Volunteer' as Role, siteId: '', donorId: '' });
   const [created, setCreated] = useState<{ name: string; link?: string } | null>(null);
   const [resetFor, setResetFor] = useState<{ name: string; link?: string } | null>(null);
+  const [offboarding, setOffboarding] = useState<User | null>(null);
+  const [offboarded, setOffboarded] = useState<(OffboardResult & { name: string }) | null>(null);
   const create = useAction();
   const update = useAction();
   const fe = create.error?.fieldErrors ?? {};
@@ -41,14 +45,33 @@ export function UsersPage() {
     if (res) setResetFor({ name: u.fullName, link: res.link });
   };
 
-  const toggle = async (u: User) => {
-    const ok = await update.run(() => api(`/users/${u.id}`, { method: 'PATCH', body: { isActive: !u.isActive } }));
-    if (ok) users.reload();
+  const reactivate = async (u: User) => {
+    const ok = await update.run(() => api(`/users/${u.id}`, { method: 'PATCH', body: { isActive: true } }));
+    if (ok) {
+      setOffboarded(null);
+      users.reload();
+    }
   };
 
   return (
     <>
       <PageHeader title="Users" lede="New accounts get an emailed link to choose their own password. Nobody, including administrators, ever sees it." />
+      {offboarded ? (
+        <Notice tone="good">
+          <p>
+            {offboarded.name} has been offboarded and signed out everywhere.
+            {offboarded.shiftsReleased ? ` ${offboarded.shiftsReleased} upcoming shift ${offboarded.shiftsReleased === 1 ? 'place was' : 'places were'} freed.` : ''}
+          </p>
+          {offboarded.siteLeftWithoutCoordinator ? (
+            <p>
+              <strong>{offboarded.siteLeftWithoutCoordinator} now has no site coordinator.</strong> Add or assign one before the next distribution day.
+            </p>
+          ) : null}
+          <p>
+            Erase their personal data from <Link to="/admin/retention">Data retention</Link> after {fmtDate(offboarded.erasureDueOn)}.
+          </p>
+        </Notice>
+      ) : null}
       {created ? (
         <Notice tone="good">
           <p>Account created for {created.name}.</p>
@@ -143,7 +166,18 @@ export function UsersPage() {
                   {ROLE_LABELS[u.role]}
                   {u.siteName ? <div className="small muted">{u.siteName}</div> : null}
                 </td>
-                <td>{u.isActive ? <Pill tone="good">Active</Pill> : <Pill tone="neutral">Deactivated</Pill>}</td>
+                <td>
+                  {u.isActive ? (
+                    <Pill tone="good">Active</Pill>
+                  ) : (
+                    <>
+                      <Pill tone="neutral">Offboarded</Pill>
+                      <div className="small muted">
+                        {u.deactivationReason ? DEACTIVATION_REASONS[u.deactivationReason] : ''} {fmtDate(u.deactivatedAt)}
+                      </div>
+                    </>
+                  )}
+                </td>
                 <td>
                   {u.id !== me?.id ? (
                     <span className="row-actions">
@@ -152,9 +186,15 @@ export function UsersPage() {
                           Send reset link
                         </Button>
                       ) : null}
-                      <Button kind={u.isActive ? 'danger' : 'quiet'} className="btn-small" busy={update.busy} onClick={() => void toggle(u)}>
-                        {u.isActive ? 'Deactivate' : 'Reactivate'}
-                      </Button>
+                      {u.isActive ? (
+                        <Button kind="danger" className="btn-small" onClick={() => setOffboarding(u)}>
+                          Offboard
+                        </Button>
+                      ) : (
+                        <Button kind="quiet" className="btn-small" busy={update.busy} onClick={() => void reactivate(u)}>
+                          Reactivate
+                        </Button>
+                      )}
                     </span>
                   ) : (
                     <span className="small muted">You</span>
@@ -165,6 +205,15 @@ export function UsersPage() {
           </tbody>
         </Table>
       ) : null}
+      <OffboardDialog
+        user={offboarding}
+        onClose={() => setOffboarding(null)}
+        onDone={(r) => {
+          setOffboarded({ ...r, name: offboarding!.fullName });
+          setOffboarding(null);
+          users.reload();
+        }}
+      />
     </>
   );
 }

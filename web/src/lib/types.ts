@@ -10,6 +10,8 @@ export interface User {
   siteName: string | null;
   donorId: string | null;
   isActive: boolean;
+  deactivatedAt?: string | null;
+  deactivationReason?: 'Retired' | 'Resigned' | 'RoleEnded' | 'Other' | null;
 }
 
 export type HouseholdStatus = 'Draft' | 'PendingVerification' | 'Active' | 'Suspended' | 'Archived';
@@ -47,6 +49,8 @@ export interface Household {
   registeredOn: string;
   verifiedOn: string | null;
   lastCollectedAt: string | null;
+  archivedAt?: string | null;
+  anonymisedAt?: string | null;
   memberCount: number;
 }
 
