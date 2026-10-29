@@ -523,6 +523,11 @@ a:hover {
 .form-row > .field > .field-error {
   grid-row: 4;
 }
+/* A button placed in a form row (such as Search) sits level with the inputs. */
+.form-row > .field > .btn {
+  grid-row: 3;
+  align-self: start;
+}
 
 .form-actions {
   display: flex;

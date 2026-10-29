@@ -324,18 +324,18 @@ export async function seedDemoData(pool: pg.Pool, deps: ServiceDeps, log: Logger
     }
 
     // ---------------------------------------------------------------- data retention examples
-    // A volunteer who retired five weeks ago (due for erasure) and households archived long enough
+    // A volunteer who retired a month ago (due for erasure) and households archived long enough
     // ago to be due for anonymisation (NFR-16). A separate random stream keeps the data above unchanged.
     const r2 = mulberry32(2026);
     const retired = await one(
       `INSERT INTO users (full_name, email, role_id, password_hash, phone_number, is_active, deactivated_at, deactivation_reason)
-       VALUES ('Bongani Zulu', 'volunteer.retired@sizani.test', $1, $2, $3, false, now() - interval '35 days', 'Retired')
+       VALUES ('Sibusiso Mabuza', 'volunteer.retired@sizani.test', $1, $2, $3, false, now() - interval '33 days', 'Retired')
        RETURNING user_id AS id`,
       [ROLE_IDS.Volunteer, passwordHash, cellphone(r2)],
     );
-    const pastShift = await one(`SELECT shift_id AS id FROM volunteer_shifts WHERE starts_at < now() - interval '40 days' ORDER BY starts_at LIMIT 1`);
+    const pastShift = await one(`SELECT shift_id AS id FROM volunteer_shifts WHERE starts_at < now() - interval '34 days' ORDER BY starts_at LIMIT 1`);
     if (pastShift) {
-      await q(`INSERT INTO shift_assignments (shift_id, user_id, status, checked_in_at, hours_served) VALUES ($1,$2,'CheckedIn',now() - interval '60 days',4.5)`, [
+      await q(`INSERT INTO shift_assignments (shift_id, user_id, status, checked_in_at, hours_served) VALUES ($1,$2,'CheckedIn',now() - interval '35 days',4.5)`, [
         pastShift.id,
         retired.id,
       ]);
