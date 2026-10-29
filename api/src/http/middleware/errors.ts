@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
 import { AppError } from '../../domain/errors.js';
+import { classifyDatabaseFailure } from '../../db/failures.js';
 import { isUniqueViolation } from '../../db/pool.js';
 import type { Logger } from '../../infra/logger.js';
 
@@ -27,6 +28,13 @@ export function errorHandler(log: Logger): ErrorRequestHandler {
     }
     if (err?.code === '23503') {
       res.status(400).json({ error: { code: 'INVALID_REFERENCE', message: 'One of the selected records no longer exists.' } });
+      return;
+    }
+    const failure = classifyDatabaseFailure(err);
+    if (failure) {
+      log[failure.severity]({ err, failure: failure.code, method: req.method, path: req.path }, 'Database failure');
+      res.setHeader('Retry-After', String(failure.retryAfterSeconds));
+      res.status(503).json({ error: { code: failure.code, message: failure.message } });
       return;
     }
     log.error({ err, method: req.method, path: req.path }, 'Unhandled error');

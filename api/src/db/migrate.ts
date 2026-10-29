@@ -18,12 +18,15 @@ async function withLock<T>(pool: pg.Pool, fn: (client: pg.PoolClient) => Promise
   const client = await pool.connect();
   try {
     await client.query('SELECT pg_advisory_lock($1)', [LOCK_KEY]);
+    // The pool's 15-second statement limit is for requests; a migration may legitimately take longer.
+    await client.query('SET statement_timeout = 0');
     await client.query(
       'CREATE TABLE IF NOT EXISTS schema_migrations (version varchar(100) PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())',
     );
     return await fn(client);
   } finally {
     await client.query('SELECT pg_advisory_unlock($1)', [LOCK_KEY]).catch(() => undefined);
+    await client.query('RESET statement_timeout').catch(() => undefined);
     client.release();
   }
 }

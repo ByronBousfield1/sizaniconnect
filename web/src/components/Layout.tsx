@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import { ConnectionBanner } from './ConnectionBanner';
 import { ROLE_LABELS } from '../lib/format';
 import type { Role } from '../lib/types';
 
@@ -85,6 +86,7 @@ export function Layout() {
       </nav>
 
       <main id="main" className="content" tabIndex={-1}>
+        <ConnectionBanner />
         <Outlet />
       </main>
     </div>

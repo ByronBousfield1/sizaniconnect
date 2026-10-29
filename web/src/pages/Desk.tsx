@@ -93,16 +93,18 @@ export function DeskPage() {
     );
   }
 
-  return <Desk event={event} canOverride={can('SiteCoordinator', 'OperationsManager')} />;
+  return <Desk event={event} canOverride={can('SiteCoordinator', 'OperationsManager')} myName={user?.fullName ?? ''} />;
 }
 
-function Desk({ event, canOverride }: { event: DistributionEvent; canOverride: boolean }) {
+function Desk({ event, canOverride, myName }: { event: DistributionEvent; canOverride: boolean; myName: string }) {
   const [code, setCode] = useState('');
   const [found, setFound] = useState<Lookup | null>(null);
   const [lookupError, setLookupError] = useState<ApiError | null>(null);
   const [scanProblem, setScanProblem] = useState<string | null>(null);
   const [failedScans, setFailedScans] = useState(0);
   const [scanning, setScanning] = useState(false);
+  const lostAttempt = useRef(false);
+  const [savedEarlier, setSavedEarlier] = useState<{ name: string; at: string } | null>(null);
   const canScan = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
   const [recorded, setRecorded] = useState<Recorded | null>(null);
   const [overrideReason, setOverrideReason] = useState('');
@@ -117,6 +119,7 @@ function Desk({ event, canOverride }: { event: DistributionEvent; canOverride: b
     setFound(null);
     setLookupError(null);
     setScanProblem(null);
+    setSavedEarlier(null);
     setOverrideReason('');
     record.setError(null);
   };
@@ -142,7 +145,7 @@ function Desk({ event, canOverride }: { event: DistributionEvent; canOverride: b
       const result = await api<Lookup>(`/households/by-ref/${encodeURIComponent(scan.code)}`, { query: { eventId: event.id } });
       setFound(result);
     } catch (err) {
-      setLookupError(err instanceof ApiError ? err : new ApiError(0, 'NETWORK', 'Could not reach the server. Check your connection.'));
+      setLookupError(err instanceof ApiError ? err : new ApiError(0, 'NETWORK', "Can't reach SizaniConnect. Check your mobile data or Wi-Fi, then try again."));
     } finally {
       setFinding(false);
     }
@@ -162,14 +165,34 @@ function Desk({ event, canOverride }: { event: DistributionEvent; canOverride: b
     return null;
   };
 
+  /**
+   * Recording a collection on a bad connection. If the request is lost (no signal, TLS handshake
+   * timeout), nobody can know whether the server saved it, so the volunteer is told to press again.
+   * That is always safe: the database allows one collection per household per event, so a repeat
+   * of a saved attempt comes back as "already collected by you", which is shown as a success.
+   */
   const submit = async (override: boolean) => {
     if (!found) return;
+    const household = found;
     const result = await record.run(() =>
       api<Recorded>('/collections', {
-        body: { eventId: event.id, householdId: found.id, override: override || undefined, overrideReason: override ? overrideReason : undefined },
+        body: { eventId: event.id, householdId: household.id, override: override || undefined, overrideReason: override ? overrideReason : undefined },
+      }).catch((err: unknown) => {
+        if (err instanceof ApiError && err.status === 0) lostAttempt.current = true;
+        const by = (err as ApiError)?.details as { verifiedByName?: string; collectedAt?: string } | undefined;
+        if (err instanceof ApiError && err.code === 'DUPLICATE_COLLECTION' && lostAttempt.current && by?.verifiedByName === myName) {
+          lostAttempt.current = false;
+          setSavedEarlier({ name: household.headOfHousehold, at: by.collectedAt ?? '' });
+          setFound(null);
+          setCode('');
+          recent.reload();
+          return undefined;
+        }
+        throw err;
       }),
     );
     if (result) {
+      lostAttempt.current = false;
       setRecorded(result);
       setFound(null);
       setCode('');
@@ -249,6 +272,15 @@ function Desk({ event, canOverride }: { event: DistributionEvent; canOverride: b
               </div>
             ) : null}
 
+            {savedEarlier ? (
+              <div className="verdict" role="status">
+                <div className="verdict-band">
+                  {savedEarlier.name}: your first try was saved before the connection dropped
+                  {savedEarlier.at ? ` (${fmtTime(savedEarlier.at)})` : ''}. Hand over one parcel only.
+                </div>
+              </div>
+            ) : null}
+
             {recorded ? (
               <div className="verdict" role="status">
                 <div className="verdict-head">
@@ -323,6 +355,12 @@ function Desk({ event, canOverride }: { event: DistributionEvent; canOverride: b
                   {eligible && duplicate && !canOverride ? <p style={{ margin: 0 }}>Ask the site coordinator if there is a genuine reason for a second parcel.</p> : null}
                   {!eligible ? <p style={{ margin: 0 }}>Do not issue a parcel.</p> : null}
                   {record.error && record.error.code !== 'OVERRIDE_REASON_REQUIRED' ? <ErrorNotice error={record.error} /> : null}
+                  {record.error?.status === 0 ? (
+                    <p style={{ margin: 0 }}>
+                      Press <strong>Record collection</strong> again when you have signal. If the first try was saved, the desk will say so: a
+                      household can never be recorded twice at one event.
+                    </p>
+                  ) : null}
                   <p style={{ margin: 'var(--s-3) 0 0' }}>
                     <button type="button" className="link-button" onClick={() => {
                         reset();

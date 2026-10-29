@@ -9,12 +9,22 @@
  *   recover-admin <email>   print a 30-minute password link for an administrator who is locked out
  *                           and has no email or recovery code (break-glass; the use is audited)
  */
+import { existsSync, readFileSync } from 'node:fs';
 import { loadConfig } from '../config.js';
 import { buildContainer } from '../container.js';
 import { logger } from '../infra/logger.js';
 import { createPool } from './pool.js';
 import { migrate, migrationStatus, rollback } from './migrate.js';
 import { seedDemoData } from './seed.js';
+
+// In the Azure SSH console the app settings are not always in the shell's environment. They are in
+// the environment of the container's first process, so take them from there when they are missing.
+if (!process.env.DATABASE_URL && existsSync('/proc/1/environ')) {
+  for (const entry of readFileSync('/proc/1/environ', 'utf8').split('\0')) {
+    const i = entry.indexOf('=');
+    if (i > 0 && process.env[entry.slice(0, i)] === undefined) process.env[entry.slice(0, i)] = entry.slice(i + 1);
+  }
+}
 
 const [command = 'status', ...args] = process.argv.slice(2);
 const option = (name: string) => {

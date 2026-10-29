@@ -81,12 +81,26 @@ export function createApp({ config, services, tokens, pool, log }: AppContext) {
   const api = Router();
   const auth = authenticate(tokens);
 
+  /**
+   * Used by the deploy smoke test, the App Service health check and the Docker HEALTHCHECK.
+   *   ok        database reachable and writable
+   *   degraded  database reachable but read-only (Azure does this when storage passes 95%)
+   *   down      database unreachable (503)
+   */
   api.get('/health', async (_req, res) => {
+    const started = Date.now();
     try {
-      await pool.query('SELECT 1');
-      res.json({ status: 'ok', version: config.version, database: 'ok' });
+      const r = await pool.query(`SELECT current_setting('transaction_read_only') AS ro`);
+      const readOnly = r.rows[0].ro === 'on';
+      res.json({
+        status: readOnly ? 'degraded' : 'ok',
+        version: config.version,
+        database: readOnly ? 'read-only' : 'ok',
+        responseMs: Date.now() - started,
+      });
     } catch {
-      res.status(503).json({ status: 'degraded', version: config.version, database: 'unreachable' });
+      res.status(503).setHeader('Retry-After', '30');
+      res.json({ status: 'down', version: config.version, database: 'unreachable' });
     }
   });
 
