@@ -34,6 +34,8 @@ test('an administrator who forgets the password gets back in with a recovery cod
   // Forgotten password, no email: the recovery-code route from the sign-in page.
   await page.getByRole('link', { name: 'Forgot your password?' }).click();
   await page.getByRole('link', { name: 'Use a recovery code instead' }).click();
+  // Wait for the new page: until the route change commits, 'Email' is still the previous page's field.
+  await expect(page.getByRole('heading', { name: 'Use a recovery code' })).toBeVisible();
   await page.getByLabel('Email').fill(ACCOUNTS.admin);
   await page.getByLabel('Recovery code').fill(codes[3].toLowerCase());
   await page.getByLabel('New password').fill('Back-In-Business-2026');
