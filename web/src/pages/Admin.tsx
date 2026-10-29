@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { CellphoneInput } from '../components/CellphoneInput';
 import { Button, ErrorNotice, Loading, Notice, PageHeader, Pill, Select, Table, TextInput } from '../components/ui';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -61,7 +62,7 @@ export function UsersPage() {
         <div className="form-row">
           <TextInput label="Full name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} error={fe.fullName} />
           <TextInput label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} error={fe.email} />
-          <TextInput label="Phone" hint="Optional" type="tel" value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} error={fe.phoneNumber} />
+          <CellphoneInput value={form.phoneNumber} onChange={(v) => setForm({ ...form, phoneNumber: v })} error={fe.phoneNumber} />
         </div>
         <div className="form-row">
           <Select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as Role })}>

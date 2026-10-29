@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button, Dialog, Empty, ErrorNotice, Loading, Notice, PageHeader, Pill, Select, Table, TextArea, TextInput } from '../components/ui';
+import { CellphoneInput } from '../components/CellphoneInput';
 import { api, download } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import { fmtDate, fmtDateTime, HOUSEHOLD_STATUS } from '../lib/format';
+import { fmtDate, fmtDateTime, fmtPhone, HOUSEHOLD_STATUS } from '../lib/format';
 import { useAction, useLoad } from '../lib/hooks';
 import type { Household, HouseholdDetail, HouseholdStatus, Member, Paged, Site } from '../lib/types';
 
@@ -236,7 +237,7 @@ export function HouseholdNewPage() {
             />
           </div>
           <div className="form-row">
-            <TextInput label="Phone number" hint="Optional" type="tel" value={form.contactNumber} onChange={set('contactNumber')} error={fe.contactNumber} />
+            <CellphoneInput value={form.contactNumber} onChange={(v) => setForm({ ...form, contactNumber: v })} error={fe.contactNumber} />
             <Select label="Collects at" value={form.homeSiteId} onChange={set('homeSiteId')} error={fe.homeSiteId} disabled={user?.role === 'SiteCoordinator'}>
               <option value="">Choose a site</option>
               {sites.data?.filter((s) => s.isActive).map((s) => (
@@ -383,7 +384,7 @@ export function HouseholdDetailPage() {
             <h2>Details</h2>
             {can('SiteCoordinator', 'OperationsManager') && ['Draft', 'PendingVerification', 'Active'].includes(h.status) && !editing ? (
               <Button kind="quiet" className="btn-small" onClick={() => {
-                  setEdit({ contactNumber: h.contactNumber ?? '', addressLine: h.addressLine, suburb: h.suburb });
+                  setEdit({ contactNumber: h.contactNumber ? fmtPhone(h.contactNumber) : '', addressLine: h.addressLine, suburb: h.suburb });
                   setEditing(true);
                 }}>
                 Edit contact details
@@ -393,7 +394,7 @@ export function HouseholdDetailPage() {
           {editing ? (
             <form onSubmit={saveEdit} noValidate>
               <ErrorNotice error={action.error} />
-              <TextInput label="Phone number" type="tel" value={edit.contactNumber} onChange={(e) => setEdit({ ...edit, contactNumber: e.target.value })} error={action.error?.fieldErrors.contactNumber} />
+              <CellphoneInput value={edit.contactNumber} onChange={(v) => setEdit({ ...edit, contactNumber: v })} error={action.error?.fieldErrors.contactNumber} />
               <TextInput label="Street address" value={edit.addressLine} onChange={(e) => setEdit({ ...edit, addressLine: e.target.value })} error={action.error?.fieldErrors.addressLine} />
               <TextInput label="Suburb" value={edit.suburb} onChange={(e) => setEdit({ ...edit, suburb: e.target.value })} error={action.error?.fieldErrors.suburb} />
               <div className="form-actions">
@@ -413,8 +414,8 @@ export function HouseholdDetailPage() {
               </dd>
               <dt>Parcel size</dt>
               <dd>{h.parcelSize}</dd>
-              <dt>Phone</dt>
-              <dd>{h.contactNumber ?? '—'}</dd>
+              <dt>Cellphone</dt>
+              <dd>{fmtPhone(h.contactNumber)}</dd>
               <dt>Address</dt>
               <dd>
                 {h.addressLine}, {h.suburb}

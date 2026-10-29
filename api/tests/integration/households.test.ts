@@ -188,3 +188,33 @@ describe('desk lookup (US-04)', () => {
     expect((await h.as('ops@t.test').get(`/api/v1/households/${id}`)).body.status).toBe('Archived');
   });
 });
+
+describe('cellphone validation (Task 2 feedback)', () => {
+  it('stores any accepted spelling in one form', async () => {
+    const res = await h.as('coorda@t.test').post('/api/v1/households', body({ contactNumber: '+27 (82) 555-0134' }));
+    expect(res.status).toBe(201);
+    const row = await h.pool.query('SELECT contact_number AS c FROM households WHERE household_id = $1', [res.body.id]);
+    expect(row.rows[0].c).toBe('+27825550134');
+  });
+
+  it('refuses a landline with a field message that says what to do', async () => {
+    const res = await h.as('coorda@t.test').post('/api/v1/households', body({ contactNumber: '011 555 0134' }));
+    expect(res.status).toBe(400);
+    expect(res.body.error.details.fields).toContainEqual({ field: 'contactNumber', message: 'That is a landline number. Enter a cellphone number instead.' });
+  });
+
+  it('allows no number at all', async () => {
+    const res = await h.as('coorda@t.test').post('/api/v1/households', body({ contactNumber: '' }));
+    expect(res.status).toBe(201);
+  });
+
+  it('applies the same rule to staff accounts, and a PATCH without the field leaves the number alone', async () => {
+    const bad = await h.as('admin@t.test').post('/api/v1/users', { fullName: 'Cell Test', email: 'celltest@t.test', phoneNumber: '0800 000 000', role: 'Volunteer' });
+    expect(bad.status).toBe(400);
+    const ok = await h.as('admin@t.test').post('/api/v1/users', { fullName: 'Cell Test', email: 'celltest@t.test', phoneNumber: '072 000 1111', role: 'Volunteer' });
+    expect(ok.status).toBe(201);
+    await h.as('admin@t.test').patch(`/api/v1/users/${ok.body.id}`, { fullName: 'Cell Tested' });
+    const row = await h.pool.query('SELECT phone_number AS p FROM users WHERE user_id = $1', [ok.body.id]);
+    expect(row.rows[0].p).toBe('+27720001111');
+  });
+});

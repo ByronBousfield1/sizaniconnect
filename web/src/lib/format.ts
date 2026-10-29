@@ -19,6 +19,10 @@ export const fmtTime = (value: string) =>
 export const fmtRand = (n: number) =>
   new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', maximumFractionDigits: 0 }).format(n);
 
+/** +27825550134 -> 082 555 0134. Anything else is shown as stored. */
+export const fmtPhone = (value: string | null | undefined) =>
+  !value ? '—' : /^\+27\d{9}$/.test(value) ? `0${value.slice(3, 5)} ${value.slice(5, 8)} ${value.slice(8)}` : value;
+
 export const fmtQty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
 
 export function todaySA(): string {

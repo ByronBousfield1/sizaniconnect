@@ -92,3 +92,52 @@ describe('a migration that fails part-way', () => {
     await h.pool.query(`DROP TABLE fine_now; DELETE FROM schema_migrations WHERE version = '900_broken.sql'`);
   });
 });
+
+describe('002_cellphone_numbers: a destructive data change that can be undone', () => {
+  it('converts numbers to +27 form, blanks what cannot be converted, and the down script restores the originals', async () => {
+    await rollback(h.pool, logger, '001_initial_schema.sql');
+    // Numbers as the Task 2 release accepted them.
+    const legacy: Record<string, string> = {
+      '082 555 0134': '+27825550134',
+      '+27 71 234 5678': '+27712345678',
+      '27731112222': '+27731112222',
+      '011 555 0134': '', // landline: cannot be a cellphone
+      '0800 123 456': '', // toll-free
+      '+27825550134': '+27825550134', // already in the new form: not touched, not backed up
+    };
+    const ids: Record<string, string> = {};
+    for (const raw of Object.keys(legacy)) {
+      ids[raw] = (
+        await h.pool.query(
+          `INSERT INTO users (full_name, email, phone_number, role_id, password_hash)
+           VALUES ('Legacy Phone', $1, $2, 4, 'x') RETURNING user_id AS id`,
+          [`legacy-${Object.keys(ids).length}@t.test`, raw],
+        )
+      ).rows[0].id;
+    }
+
+    await migrate(h.pool, logger);
+    for (const [raw, expected] of Object.entries(legacy)) {
+      const now = (await h.pool.query('SELECT phone_number AS p FROM users WHERE user_id = $1', [ids[raw]])).rows[0].p;
+      expect(now, raw).toBe(expected || null);
+    }
+    const backedUp = (await h.pool.query(`SELECT count(*) AS n FROM _backup_002_phone_numbers WHERE table_name = 'users' AND row_id = ANY($1)`, [Object.values(ids)])).rows[0].n;
+    expect(backedUp).toBe(5);
+
+    // The database itself now refuses a landline.
+    await expect(h.pool.query('UPDATE users SET phone_number = $2 WHERE user_id = $1', [ids['082 555 0134'], '0115550134'])).rejects.toThrow(/ck_users_cellphone/);
+
+    // Someone corrects one number after the release; the rollback must not overwrite that.
+    await h.pool.query('UPDATE users SET phone_number = $2 WHERE user_id = $1', [ids['011 555 0134'], '+27831234567']);
+
+    await rollback(h.pool, logger, '001_initial_schema.sql');
+    const restored = async (raw: string) => (await h.pool.query('SELECT phone_number AS p FROM users WHERE user_id = $1', [ids[raw]])).rows[0].p;
+    expect(await restored('082 555 0134')).toBe('082 555 0134');
+    expect(await restored('0800 123 456')).toBe('0800 123 456');
+    expect(await restored('011 555 0134')).toBe('+27831234567');
+    expect((await h.pool.query(`SELECT to_regclass('public._backup_002_phone_numbers') AS t`)).rows[0].t).toBeNull();
+
+    await h.pool.query('DELETE FROM users WHERE user_id = ANY($1)', [Object.values(ids)]);
+    await migrate(h.pool, logger);
+  });
+});

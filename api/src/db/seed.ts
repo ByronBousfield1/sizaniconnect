@@ -83,7 +83,7 @@ export async function seedDemoData(pool: pg.Pool, deps: ServiceDeps, log: Logger
         await one(
           `INSERT INTO users (full_name, email, role_id, site_id, donor_id, password_hash, phone_number)
            VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING user_id AS id`,
-          [name, email, ROLE_IDS[role], siteId, donorId, passwordHash, `08${Math.floor(rand() * 1e8).toString().padStart(8, '0')}`],
+          [name, email, ROLE_IDS[role], siteId, donorId, passwordHash, cellphone(rand)],
         )
       ).id;
     }
@@ -206,7 +206,7 @@ export async function seedDemoData(pool: pg.Pool, deps: ServiceDeps, log: Logger
           ref,
           head,
           hashIdentityNumber(syntheticSaId(rand), deps.config.idHashPepper),
-          `07${Math.floor(rand() * 1e8).toString().padStart(8, '0')}`,
+          cellphone(rand),
           `${10 + Math.floor(rand() * 4000)} ${pick(streets)}`,
           site.suburb,
           site.id,
@@ -343,6 +343,16 @@ function mulberry32(seed: number) {
 }
 
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+/**
+ * A plausible South African cellphone number in the stored E.164 form. Uses one random draw, as
+ * the earlier version did, so the rest of the demo data set comes out the same.
+ */
+function cellphone(rand: () => number): string {
+  const prefixes = ['60', '61', '63', '65', '67', '71', '72', '73', '74', '76', '78', '79', '81', '82', '83', '84'];
+  const n = Math.floor(rand() * prefixes.length * 1e7);
+  return `+27${prefixes[Math.floor(n / 1e7)]}${(n % 1e7).toString().padStart(7, '0')}`;
+}
 function randomSuffix(rand: () => number) {
   let s = '';
   for (let i = 0; i < 6; i++) s += ALPHABET[Math.floor(rand() * 32)];
