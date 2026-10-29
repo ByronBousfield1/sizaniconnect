@@ -9,7 +9,8 @@ import { logger } from './infra/logger.js';
 async function main() {
   const config = loadConfig();
   const pool = createPool(config.databaseUrl, config.databaseSsl);
-  await migrate(pool, logger);
+  if (config.skipMigrations) logger.warn('SKIP_MIGRATIONS is set: starting without applying migrations');
+  else await migrate(pool, logger);
 
   const { deps, services } = buildContainer(config, pool, logger);
   if (config.seedDemoData) await seedDemoData(pool, deps, logger);

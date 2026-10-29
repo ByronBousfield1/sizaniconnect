@@ -22,6 +22,7 @@ export interface Config {
   mailFrom: string;
   seedDemoData: boolean;
   seedDemoPassword?: string;
+  skipMigrations: boolean;
   staticDir: string;
   version: string;
 }
@@ -64,6 +65,8 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     mailFrom: process.env.MAIL_FROM ?? 'SizaniConnect <no-reply@sizani.test>',
     seedDemoData: process.env.SEED_DEMO_DATA === 'true',
     seedDemoPassword: process.env.SEED_DEMO_PASSWORD || undefined,
+    // Set during a database rollback so a restart does not re-apply what was just undone.
+    skipMigrations: process.env.SKIP_MIGRATIONS === 'true',
     staticDir: process.env.STATIC_DIR ?? path.resolve(import.meta.dirname, '..', 'public'),
     version: process.env.GIT_SHA ?? readVersionFile(),
     ...overrides,
