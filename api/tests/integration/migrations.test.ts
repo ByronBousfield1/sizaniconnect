@@ -141,3 +141,27 @@ describe('002_cellphone_numbers: a destructive data change that can be undone', 
     await migrate(h.pool, logger);
   });
 });
+
+describe('004_user_lifecycle_and_retention: upgrading a database that already holds Task 2 data', () => {
+  it('applies when accounts were deactivated and households archived before the release (as in production)', async () => {
+    const household = await h.activeHousehold();
+    await rollback(h.pool, logger, '003_account_recovery.sql');
+    // Deactivated and archived the Task 2 way: a flag and a status, with no dates recorded.
+    const userId = (
+      await h.pool.query(
+        `INSERT INTO users (full_name, email, role_id, password_hash, is_active) VALUES ('Former Volunteer', 'former@t.test', 4, 'x', false) RETURNING user_id AS id`,
+      )
+    ).rows[0].id;
+    await h.pool.query(`UPDATE households SET status = 'Archived' WHERE household_id = $1`, [household.id]);
+
+    expect(await migrate(h.pool, logger)).toEqual(['004_user_lifecycle_and_retention.sql']);
+
+    const u = (await h.pool.query('SELECT deactivated_at, deactivation_reason FROM users WHERE user_id = $1', [userId])).rows[0];
+    expect(u.deactivated_at).not.toBeNull();
+    expect(u.deactivation_reason).toBe('Other');
+    const hh = (await h.pool.query('SELECT archived_at FROM households WHERE household_id = $1', [household.id])).rows[0];
+    expect(hh.archived_at).not.toBeNull();
+
+    await h.pool.query('DELETE FROM users WHERE user_id = $1', [userId]);
+  });
+});
