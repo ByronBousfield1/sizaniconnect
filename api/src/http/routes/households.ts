@@ -9,15 +9,15 @@ import { idParam, optionalText, paging, parse, personName, phone, text, uuid } f
 
 const member = z.object({
   firstName: personName('First name'),
-  ageBand: z.enum(['0-5', '6-12', '13-17', '18-59', '60+'], { errorMap: () => ({ message: 'Choose an age band.' }) }),
+  ageBand: z.enum(['0-5', '6-12', '13-17', '18-59', '60+'], { error: 'Choose an age band.' }),
   dependantType: z.enum(['Self', 'Spouse', 'Child', 'Elderly', 'Other'], {
-    errorMap: () => ({ message: 'Choose a relationship.' }),
+    error: 'Choose a relationship.',
   }),
 });
 
 const registerSchema = z.object({
   headOfHousehold: personName('Head of household'),
-  idNumber: z.string({ required_error: 'ID or passport number is required.' }).max(30),
+  idNumber: z.string({ error: 'ID or passport number is required.' }).max(30),
   contactNumber: phone,
   addressLine: text('Address', 3, 200),
   suburb: text('Suburb', 2, 80),

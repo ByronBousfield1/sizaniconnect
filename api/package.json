@@ -1,6 +1,6 @@
 {
   "name": "@sizaniconnect/api",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "private": true,
   "type": "module",
   "description": "SizaniConnect REST API — food relief operations for Sizani Community Food Network NPC",
@@ -31,7 +31,7 @@
     "pg": "^8.16.0",
     "pino": "^9.7.0",
     "pino-http": "^10.5.0",
-    "zod": "^3.25.0"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.28.0",

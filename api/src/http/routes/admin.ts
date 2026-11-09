@@ -21,7 +21,7 @@ export function adminRoutes(services: Services) {
         fullName: personName('Full name'),
         email,
         phoneNumber: phone,
-        role: z.enum(ROLES, { errorMap: () => ({ message: 'Choose a role.' }) }),
+        role: z.enum(ROLES, { error: 'Choose a role.' }),
         siteId: uuid('Site').nullish(),
         donorId: uuid('Donor').nullish(),
       }),
@@ -56,7 +56,7 @@ export function adminRoutes(services: Services) {
   router.post('/users/:id/offboard', admin, async (req, res) => {
     const { id } = parse(idParam, req.params);
     const body = parse(
-      z.object({ reason: z.enum(DEACTIVATION_REASONS, { errorMap: () => ({ message: 'Choose why the person is leaving.' }) }) }),
+      z.object({ reason: z.enum(DEACTIVATION_REASONS, { error: 'Choose why the person is leaving.' }) }),
       req.body,
     );
     res.json(await services.retention.offboardUser(actorOf(req), id, body.reason));

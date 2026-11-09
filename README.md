@@ -2,7 +2,7 @@
 
 Food relief operations for **Sizani Community Food Network NPC**, a Johannesburg non-profit running six distribution sites. SizaniConnect replaces paper registers, WhatsApp shift lists and delivery-note spreadsheets with one record: who is registered, what was issued to whom, which stock it came from, and who was on shift.
 
-INSY7315 Information Systems 3E (WIL), Group 13. Release **v1.1.0**, the final system for Task 3.
+INSY7315 Information Systems 3E (WIL), Team Ubunye (Group 13). Release **v1.1.0**, the final system for Task 3.
 
 - **Live site:** <https://sizaniconnect-bb7315.azurewebsites.net> (staging: <https://sizaniconnect-bb7315-staging.azurewebsites.net>)
 - **User guide:** [SizaniConnect-User-Guide.pdf](docs/user-guide/SizaniConnect-User-Guide.pdf), every feature by role, with annotated screenshots
