@@ -26,7 +26,7 @@ jobs:
   build:
     name: Build release package
     needs: ci
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -55,7 +55,7 @@ jobs:
     name: Deploy to staging
     if: github.ref == 'refs/heads/develop' && vars.AZURE_WEBAPP_NAME_STAGING != ''
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: staging
       url: https://${{ vars.AZURE_WEBAPP_NAME_STAGING }}.azurewebsites.net
@@ -85,7 +85,7 @@ jobs:
       vars.AZURE_WEBAPP_NAME_PRODUCTION != '' &&
       (github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && startsWith(github.ref, 'refs/tags/v')))
     needs: build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment:
       name: production
       url: https://${{ vars.AZURE_WEBAPP_NAME_PRODUCTION }}.azurewebsites.net
