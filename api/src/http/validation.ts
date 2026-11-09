@@ -18,7 +18,7 @@ const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 
 export const text = (label: string, min: number, max: number) =>
   z
-    .string({ required_error: `${label} is required.`, invalid_type_error: `${label} must be text.` })
+    .string({ error: (issue) => (issue.input === undefined ? `${label} is required.` : `${label} must be text.`) })
     .transform((s) => s.replace(CONTROL, '').trim())
     .pipe(
       z
@@ -60,7 +60,7 @@ export const uuid = (label = 'ID') => z.string().uuid(`${label} is not valid.`);
 
 export const isoDate = (label = 'Date') =>
   z
-    .string({ required_error: `${label} is required.` })
+    .string({ error: `${label} is required.` })
     .regex(/^\d{4}-\d{2}-\d{2}$/, `${label} must be a date (yyyy-mm-dd).`)
     .refine((v) => !Number.isNaN(Date.parse(`${v}T00:00:00Z`)), `${label} is not a real date.`);
 
@@ -68,7 +68,7 @@ export const clockTime = (label: string) =>
   z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, `${label} must be a time such as 09:30.`);
 
 export const email = z
-  .string({ required_error: 'Email is required.' })
+  .string({ error: 'Email is required.' })
   .trim()
   .toLowerCase()
   .max(254, 'Email is too long.')
