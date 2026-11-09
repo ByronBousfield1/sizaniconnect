@@ -16,10 +16,12 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Runners are pinned to Ubuntu 24.04. GitHub moved ubuntu-latest to Ubuntu 26.04 in November 2026,
+# and Playwright 1.56 cannot install Chromium there, so the end-to-end job failed before any test ran.
 jobs:
   api:
     name: API (lint, types, unit and integration tests)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: api
@@ -60,7 +62,7 @@ jobs:
 
   web:
     name: Web (lint, types, component tests, build)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: web
@@ -84,7 +86,7 @@ jobs:
     # role, the event-desk acceptance criteria (including damaged QR scans and camera scanning on a
     # CPU-throttled phone), failure handling, and WCAG 2.1 AA checks with axe-core (NFR-10).
     needs: [api, web]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:16
@@ -126,7 +128,7 @@ jobs:
 
   dependencies:
     name: Dependency audit (T-11)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
