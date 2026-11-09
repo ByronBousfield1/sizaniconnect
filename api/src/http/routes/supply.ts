@@ -19,7 +19,7 @@ export function supplyRoutes(services: Services) {
       z.object({
         donorName: text('Donor name', 2, 150),
         donorType: z.enum(['Individual', 'Corporate', 'Trust', 'Government'], {
-          errorMap: () => ({ message: 'Choose a donor type.' }),
+          error: 'Choose a donor type.',
         }),
         contactEmail: z.union([email, z.literal(''), z.null()]).optional(),
         isAnonymous: z.boolean().optional(),
@@ -38,7 +38,7 @@ export function supplyRoutes(services: Services) {
     const body = parse(
       z.object({
         donorId: uuid('Donor'),
-        donationType: z.enum(['Cash', 'InKind'], { errorMap: () => ({ message: 'Choose cash or in-kind.' }) }),
+        donationType: z.enum(['Cash', 'InKind'], { error: 'Choose cash or in-kind.' }),
         monetaryValue: z.number().min(0).max(100_000_000).optional(),
         receivedOn: isoDate('Received on'),
         notes: optionalText('Notes', 300),
@@ -46,7 +46,7 @@ export function supplyRoutes(services: Services) {
           .array(
             z.object({
               stockItemId: uuid('Item'),
-              quantity: z.number({ invalid_type_error: 'Quantity must be a number.' }).positive('Quantity must be more than zero.').max(1_000_000),
+              quantity: z.number({ error: 'Quantity must be a number.' }).positive('Quantity must be more than zero.').max(1_000_000),
               expiryDate: isoDate('Expiry date').nullish(),
             }),
           )

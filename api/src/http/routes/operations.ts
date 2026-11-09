@@ -30,7 +30,7 @@ export function eventRoutes(services: Services) {
         scheduledDate: isoDate('Date'),
         startTime: clockTime('Start time'),
         endTime: clockTime('End time'),
-        plannedParcels: z.number({ invalid_type_error: 'Planned parcels must be a number.' }).int().min(1).max(5000),
+        plannedParcels: z.number({ error: 'Planned parcels must be a number.' }).int().min(1).max(5000),
         minVolunteers: z.number().int().min(0).max(50).optional(),
       }),
       req.body,
@@ -67,7 +67,7 @@ export function eventRoutes(services: Services) {
     const { id } = parse(idParam, req.params);
     const body = parse(
       z.object({
-        physicalCount: z.number({ required_error: 'Enter the number of parcels counted.' }).int().min(0).max(10000),
+        physicalCount: z.number({ error: 'Enter the number of parcels counted.' }).int().min(0).max(10000),
         varianceReason: optionalText('Reason', 500),
       }),
       req.body,
