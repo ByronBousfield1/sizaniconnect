@@ -1,6 +1,6 @@
 {
   "name": "@sizaniconnect/api",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "private": true,
   "type": "module",
   "description": "SizaniConnect REST API — food relief operations for Sizani Community Food Network NPC",
